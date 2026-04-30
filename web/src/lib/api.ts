@@ -39,6 +39,7 @@ export type Facility = {
   slug: string;
   description?: string | null;
   addressLine?: string | null;
+  isActive?: boolean;
 };
 
 export type EventRecord = {
@@ -52,8 +53,11 @@ export type EventRecord = {
   locationDetails?: string | null;
   attendanceCount: number;
   joined: boolean;
-  host: { id: string; fullName: string };
+  liked: boolean;
+  likeCount: number;
+  host: { id: string; fullName: string; badges: string[] };
   facility?: { id: string; name: string } | null;
+  attendees?: { id: string; fullName: string }[];
 };
 
 export type BadgeType = {
@@ -63,8 +67,16 @@ export type BadgeType = {
   description?: string | null;
 };
 
+export type BadgeAppRecord = {
+  id: string;
+  status: string;
+  applicantName: string;
+  badgeName: string;
+  message: string;
+  createdAt: string;
+};
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  // Centralize fetch behavior so auth cookies and JSON handling stay consistent.
   const headers = new Headers(init.headers ?? {});
 
   if (init.body && !headers.has("Content-Type")) {
@@ -108,6 +120,7 @@ export const api = {
       method: "POST",
       headers: { "X-CSRF-Token": csrfToken },
     }),
+
   getAdminSession: () => request<AdminSessionResponse>("/api/admin/session/me"),
   loginAdmin: (input: { email: string; password: string }) =>
     request<{ admin: AuthenticatedAdmin }>("/api/admin/session/login", {
@@ -119,8 +132,59 @@ export const api = {
       method: "POST",
       headers: { "X-CSRF-Token": csrfToken },
     }),
+
+  // Admin Settings
+  getSettings: () => request<{regionLimit: string}>("/api/settings"),
+  updateSettings: (regionLimit: string) => request<void>("/api/admin/settings", { 
+      method: "PUT", body: JSON.stringify({regionLimit}) 
+  }),
+
+  // Facilities
   getFacilities: () => request<{ facilities: Facility[] }>("/api/facilities"),
-  getEvents: () => request<{ events: EventRecord[] }>("/api/events"),
+  getAdminFacilities: () => request<{ facilities: Facility[] }>("/api/admin/facilities"),
+  createFacility: (input: {name: string, addressLine: string}) => request<void>("/api/admin/facilities", { 
+      method: "POST", body: JSON.stringify(input) 
+  }),
+  updateFacility: (id: string, input: { name?: string; addressLine?: string; description?: string; isActive?: boolean }) =>
+    request<void>(`/api/admin/facilities/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  deactivateFacility: (id: string) => request<void>(`/api/admin/facilities/${id}`, { method: "DELETE" }),
+
+  // Events
+  getEvents: (params?: {
+    from?: string;
+    to?: string;
+    q?: string;
+    locationType?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const search = new URLSearchParams();
+    if (params?.from) search.set("from", params.from);
+    if (params?.to) search.set("to", params.to);
+    if (params?.q) search.set("q", params.q);
+    if (params?.locationType) search.set("locationType", params.locationType);
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.offset != null) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return request<{ events: EventRecord[]; total: number }>(`/api/events${qs ? `?${qs}` : ""}`);
+  },
   getMyEvents: () => request<{ upcoming: EventRecord[]; past: EventRecord[] }>("/api/my-events"),
+  createEvent: (input: any) => request<void>("/api/events", { method: "POST", body: JSON.stringify(input) }),
+  joinEvent: (id: string) => request<void>(`/api/events/${id}/join`, { method: "POST" }),
+  withdrawEvent: (id: string) => request<void>(`/api/events/${id}/withdraw`, { method: "POST" }),
+  cancelEvent: (id: string) => request<void>(`/api/events/${id}/cancel`, { method: "POST" }),
+  likeEvent: (id: string) => request<void>(`/api/events/${id}/like`, { method: "POST" }),
+
+  // Badges
   getBadgeTypes: () => request<{ badgeTypes: BadgeType[] }>("/api/badge-types"),
+  submitBadgeApp: (input: {badgeTypeId: string, message: string}) => request<void>("/api/badge-applications", { 
+      method: "POST", body: JSON.stringify(input) 
+  }),
+  getBadgeApps: () => request<{ applications: BadgeAppRecord[] }>("/api/admin/badge-applications"),
+  reviewBadgeApp: (id: string, status: string) => request<void>(`/api/admin/badge-applications/${id}/review`, { 
+      method: "POST", body: JSON.stringify({status}) 
+  }),
 };

@@ -15,8 +15,8 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-
 def upgrade() -> None:
+    # 1. Users Table
     op.create_table(
         "users",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -31,6 +31,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_users_email_normalized", "users", ["email_normalized"], unique=True)
 
+    # 2. Admins Table
     op.create_table(
         "admins",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -45,6 +46,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_admins_email_normalized", "admins", ["email_normalized"], unique=True)
 
+    # 3. Sessions Table
     op.create_table(
         "sessions",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -61,6 +63,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_sessions_token_hash", "sessions", ["token_hash"], unique=True)
 
+    # 4. Facilities Table
     op.create_table(
         "facilities",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -74,6 +77,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("slug", name="uq_facilities_slug"),
     )
 
+    # 5. Badge Types Table
     op.create_table(
         "badge_types",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -86,6 +90,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("code", name="uq_badge_types_code"),
     )
 
+    # 6. Events Table
     op.create_table(
         "events",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -103,6 +108,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
 
+    # 7. Event Attendees Table
     op.create_table(
         "event_attendees",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -114,6 +120,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("event_id", "user_id", name="uq_event_attendees_event_user"),
     )
 
+    # 8. Event Likes Table
     op.create_table(
         "event_likes",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -124,6 +131,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("event_id", "user_id", name="uq_event_likes_event_user"),
     )
 
+    # 9. Badge Applications Table
     op.create_table(
         "badge_applications",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -138,6 +146,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
 
+    # 10. User Badges Table
     op.create_table(
         "user_badges",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -150,6 +159,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("user_id", "badge_type_id", name="uq_user_badges_user_badge_type"),
     )
 
+    # 11. Audit Logs Table
     op.create_table(
         "audit_logs",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -163,8 +173,17 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
 
+    # 12. App Settings Table (THIS FIXES THE ERROR)
+    op.create_table(
+        "app_settings",
+        sa.Column("key", sa.String(length=64), primary_key=True),
+        sa.Column("value", sa.String(length=255), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+    )
 
 def downgrade() -> None:
+    op.drop_table("app_settings") # Add this line
     op.drop_table("audit_logs")
     op.drop_table("user_badges")
     op.drop_table("badge_applications")

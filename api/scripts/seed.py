@@ -5,26 +5,13 @@ from datetime import timedelta
 from sqlalchemy import select
 
 from pfb_api.db import SessionLocal
-from pfb_api.models import Admin, BadgeType, Event, EventAttendance, Facility, User, utc_now
+from pfb_api.models import Admin, BadgeType, Event, EventAttendance, Facility, User, AppSetting, utc_now
 from pfb_api.security import hash_password, normalize_and_validate_email
 
-# These accounts exist only for local development and team test runs.
 SEED_USERS = [
-    {
-        "full_name": "Alex Rivera",
-        "email": "alex@example.com",
-        "password": "password123",
-    },
-    {
-        "full_name": "Maya Chen",
-        "email": "maya@example.com",
-        "password": "password123",
-    },
-    {
-        "full_name": "Jordan Kim",
-        "email": "jordan@example.com",
-        "password": "password123",
-    },
+    {"full_name": "Alex Rivera", "email": "alex@example.com", "password": "password123"},
+    {"full_name": "Maya Chen", "email": "maya@example.com", "password": "password123"},
+    {"full_name": "Jordan Kim", "email": "jordan@example.com", "password": "password123"},
 ]
 
 SEED_ADMIN = {
@@ -126,9 +113,12 @@ def ensure_peer_trainer_badge(db) -> BadgeType:
     db.add(badge)
     return badge
 
+def ensure_settings(db):
+    existing = db.scalar(select(AppSetting).where(AppSetting.key == "running_region_limit"))
+    if not existing:
+        db.add(AppSetting(key="running_region_limit", value="New York State, US"))
 
 def ensure_sample_event(db, host: User, attendee: User, facility: Facility) -> None:
-    # Seed one realistic event so the list pages are not empty on first run.
     existing = db.scalar(select(Event).where(Event.host_user_id == host.id))
     if existing is not None:
         return
@@ -147,7 +137,6 @@ def ensure_sample_event(db, host: User, attendee: User, facility: Facility) -> N
     )
     db.add(event)
     db.flush()
-
     db.add(EventAttendance(event=event, user=attendee))
 
 
@@ -157,6 +146,7 @@ def main() -> None:
         admin = upsert_admin(db, **SEED_ADMIN)
         facilities = [upsert_facility(db, **facility_payload) for facility_payload in SEED_FACILITIES]
         ensure_peer_trainer_badge(db)
+        ensure_settings(db)
         ensure_sample_event(db, users[0], users[1], facilities[0])
 
         db.commit()

@@ -3,17 +3,20 @@ from __future__ import annotations
 import json
 from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 
 from pfb_api.db import SessionLocal
 from pfb_api.models import (
     Admin,
     AppSetting,
+    BadgeApplication,
     BadgeType,
     Event,
     EventAttendance,
+    EventLike,
     Facility,
     User,
+    UserBadge,
     utc_now,
 )
 from pfb_api.security import hash_password, normalize_and_validate_email
@@ -158,6 +161,21 @@ def add_attendee_if_missing(db, event: Event, user: User) -> None:
         db.add(EventAttendance(event=event, user=user))
 
 
+def add_like_if_missing(db, event: Event, user: User) -> None:
+    """Add a local FReq 5 like only when it does not already exist."""
+    exists = db.scalar(
+        select(EventLike).where(
+            and_(
+                EventLike.event_id == event.id,
+                EventLike.user_id == user.id,
+            )
+        )
+    )
+
+    if exists is None:
+        db.add(EventLike(event=event, user=user))
+
+
 def upsert_event(
     db,
     *,
@@ -204,13 +222,12 @@ def upsert_event(
 
 
 def ensure_sample_events(db, users: dict[str, User], facilities: dict[str, Facility]) -> None:
-    """Seed event states needed for a complete local FReq 1-3 test run."""
+    """Seed event states needed for a complete local FReq 1-5 test run."""
     alex = users["alex@example.com"]
     maya = users["maya@example.com"]
     jordan = users["jordan@example.com"]
 
     brooklyn_gym = facilities["brooklyn-athletic-facility"]
-    campus_track = facilities["campus-track"]
     weight_room = facilities["weight-room"]
 
     # FReq 1 + FReq 2: A normal upcoming facility event with open spots.
@@ -270,7 +287,7 @@ def ensure_sample_events(db, users: dict[str, User], facilities: dict[str, Facil
         attendees=[maya],
     )
 
-    # FReq 3: Past joined event for history display and later like testing.
+    # FReq 3 + FReq 5: Past joined event for history display and like testing.
     upsert_event(
         db,
         host=maya,
@@ -285,8 +302,8 @@ def ensure_sample_events(db, users: dict[str, User], facilities: dict[str, Facil
         attendees=[alex],
     )
 
-    # FReq 3: Past hosted event so hosts can see history and likes received.
-    upsert_event(
+    # FReq 3 + FReq 5: Past hosted event so hosts can see history and likes received.
+    past_weight_room = upsert_event(
         db,
         host=alex,
         activity_type="Past Weight Room Session",
@@ -297,6 +314,106 @@ def ensure_sample_events(db, users: dict[str, User], facilities: dict[str, Facil
         facility=weight_room,
         notes="Past hosted event used for host history.",
         attendees=[maya, jordan],
+    )
+
+    # FReq 5.3: Store a unary like associated with one attendee and one past event.
+    add_like_if_missing(db, past_weight_room, maya)
+
+
+def ensure_user_badge(db, *, user: User, badge_type: BadgeType, admin: Admin) -> None:
+    """Grant a badge if the user does not already have it."""
+    exists = db.scalar(
+        select(UserBadge).where(
+            UserBadge.user_id == user.id,
+            UserBadge.badge_type_id == badge_type.id,
+        )
+    )
+
+    if exists is None:
+        db.add(
+            UserBadge(
+                user=user,
+                badge_type=badge_type,
+                granted_by_admin=admin,
+            )
+        )
+
+
+def upsert_badge_application(
+    db,
+    *,
+    user: User,
+    badge_type: BadgeType,
+    status: str,
+    message: str,
+    admin: Admin | None = None,
+) -> BadgeApplication:
+    """Create predictable FReq 6 application states for local testing."""
+    application = db.scalar(
+        select(BadgeApplication).where(
+            BadgeApplication.user_id == user.id,
+            BadgeApplication.badge_type_id == badge_type.id,
+            BadgeApplication.status == status,
+        )
+    )
+
+    if application is None:
+        application = BadgeApplication(
+            user=user,
+            badge_type=badge_type,
+            status=status,
+        )
+        db.add(application)
+
+    application.applicant_message = message
+
+    if status in {"approved", "denied"} and admin is not None:
+        application.reviewer_admin = admin
+        application.reviewed_at = utc_now() - timedelta(days=1)
+
+    return application
+
+
+def ensure_sample_badge_data(
+    db,
+    *,
+    users: dict[str, User],
+    admin: Admin,
+    peer_trainer_badge: BadgeType,
+) -> None:
+    """Seed FReq 6 states: approved, submitted, and denied badge applications."""
+    alex = users["alex@example.com"]
+    maya = users["maya@example.com"]
+    jordan = users["jordan@example.com"]
+
+    # FReq 6.5: Alex has an approved badge that displays on his posted events.
+    upsert_badge_application(
+        db,
+        user=alex,
+        badge_type=peer_trainer_badge,
+        status="approved",
+        message="I regularly help classmates with safe beginner strength routines.",
+        admin=admin,
+    )
+    ensure_user_badge(db, user=alex, badge_type=peer_trainer_badge, admin=admin)
+
+    # FReq 6.2 + FReq 6.3: Maya has a pending submitted application in the admin queue.
+    upsert_badge_application(
+        db,
+        user=maya,
+        badge_type=peer_trainer_badge,
+        status="submitted",
+        message="I have completed campus fitness safety training and want to help peers.",
+    )
+
+    # FReq 6.2: Jordan has a denied historical application and can submit again later.
+    upsert_badge_application(
+        db,
+        user=jordan,
+        badge_type=peer_trainer_badge,
+        status="denied",
+        message="I want to be recognized as a peer trainer.",
+        admin=admin,
     )
 
 
@@ -311,9 +428,18 @@ def main() -> None:
         users = {user.email_normalized: user for user in users_list}
         facilities = {facility.slug: facility for facility in facilities_list}
 
-        ensure_peer_trainer_badge(db)
+        peer_trainer_badge = ensure_peer_trainer_badge(db)
         ensure_settings(db)
+
+        db.flush()
+
         ensure_sample_events(db, users, facilities)
+        ensure_sample_badge_data(
+            db,
+            users=users,
+            admin=admin,
+            peer_trainer_badge=peer_trainer_badge,
+        )
 
         db.commit()
 

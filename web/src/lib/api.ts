@@ -89,11 +89,16 @@ export type BadgeType = {
 
 export type BadgeAppRecord = {
   id: string;
-  status: string;
-  applicantName: string;
+  status: "submitted" | "approved" | "denied" | string;
+  badgeTypeId: string;
+  badgeTypeCode: string;
   badgeName: string;
   message: string;
+  decisionNotes?: string | null;
   createdAt: string;
+  reviewedAt?: string | null;
+  applicantName?: string | null;
+  applicantEmail?: string | null;
 };
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -210,14 +215,15 @@ export const api = {
   likeEvent: (id: string) => request<void>(`/api/events/${id}/like`, { method: "POST" }),
 
   getBadgeTypes: () => request<{ badgeTypes: BadgeType[] }>("/api/badge-types"),
+  getMyBadgeApps: () => request<{ applications: BadgeAppRecord[] }>("/api/badge-applications"),
   submitBadgeApp: (input: { badgeTypeId: string; message: string }) =>
-    request<void>("/api/badge-applications", {
+    request<{ message: string; status: string; applicationId: string }>("/api/badge-applications", {
       method: "POST",
       body: JSON.stringify(input),
     }),
   getBadgeApps: () => request<{ applications: BadgeAppRecord[] }>("/api/admin/badge-applications"),
-  reviewBadgeApp: (id: string, status: string) =>
-    request<void>(`/api/admin/badge-applications/${id}/review`, {
+  reviewBadgeApp: (id: string, status: "approved" | "denied") =>
+    request<{ message: string; status: string }>(`/api/admin/badge-applications/${id}/review`, {
       method: "POST",
       body: JSON.stringify({ status }),
     }),

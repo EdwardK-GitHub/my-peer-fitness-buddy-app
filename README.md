@@ -77,7 +77,10 @@
 - **`web/src/index.css`**: Contains global CSS resets and Tailwind directive imports.
 - **`web/src/lib/api.ts`**: Defines the typed API client for communicating with the backend.
 - **`web/src/lib/queryClient.ts`**: Configures the shared TanStack Query client for data fetching.
+- **`web/src/lib/datetime.ts`**: Provides shared date/time conversion and formatting helpers for event flows.
 - **`web/src/components/AppShell.tsx`**: Provides the shared layout, navigation, and shell used across the frontend.
+- **`web/src/components/InlineNotice.tsx`**: Displays production-style success, error, and informational messages.
+- **`web/src/components/ConfirmActionDialog.tsx`**: Provides reusable confirmation dialogs for event management actions.
 - **`web/src/components/LocationSelector.tsx`**: Renders the interactive Leaflet map for outdoor run selections.
 - **`web/src/components/ProtectedAdminRoute.tsx`**: Protects routes ensuring only authenticated admins can access them.
 - **`web/src/components/ProtectedUserRoute.tsx`**: Protects routes ensuring only authenticated users can access them.

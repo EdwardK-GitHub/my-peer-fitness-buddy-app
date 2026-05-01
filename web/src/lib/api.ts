@@ -48,16 +48,36 @@ export type EventRecord = {
   scheduledAt: string;
   capacity: number;
   status: string;
-  locationType: string;
+  locationType: "facility" | "running" | string;
   locationLabel?: string | null;
   locationDetails?: string | null;
+  notes?: string | null;
+  attendeeCount: number;
+  participantCount: number;
   attendanceCount: number;
+  spotsRemaining: number;
   joined: boolean;
+  isHost: boolean;
+  isPast: boolean;
   liked: boolean;
   likeCount: number;
+  canJoin: boolean;
+  canWithdraw: boolean;
+  canCancel: boolean;
   host: { id: string; fullName: string; badges: string[] };
   facility?: { id: string; name: string } | null;
   attendees?: { id: string; fullName: string }[];
+};
+
+export type CreateEventInput = {
+  activityType: string;
+  scheduledAt: string;
+  capacity: number;
+  locationType: "facility" | "running";
+  facilityId?: string;
+  locationLabel?: string;
+  locationDetails?: string;
+  notes?: string;
 };
 
 export type BadgeType = {
@@ -133,26 +153,31 @@ export const api = {
       headers: { "X-CSRF-Token": csrfToken },
     }),
 
-  // Admin Settings
-  getSettings: () => request<{regionLimit: string}>("/api/settings"),
-  updateSettings: (regionLimit: string) => request<void>("/api/admin/settings", { 
-      method: "PUT", body: JSON.stringify({regionLimit}) 
-  }),
+  getSettings: () => request<{ regionLimit: string }>("/api/settings"),
+  updateSettings: (regionLimit: string) =>
+    request<void>("/api/admin/settings", {
+      method: "PUT",
+      body: JSON.stringify({ regionLimit }),
+    }),
 
-  // Facilities
   getFacilities: () => request<{ facilities: Facility[] }>("/api/facilities"),
   getAdminFacilities: () => request<{ facilities: Facility[] }>("/api/admin/facilities"),
-  createFacility: (input: {name: string, addressLine: string}) => request<void>("/api/admin/facilities", { 
-      method: "POST", body: JSON.stringify(input) 
-  }),
-  updateFacility: (id: string, input: { name?: string; addressLine?: string; description?: string; isActive?: boolean }) =>
+  createFacility: (input: { name: string; addressLine: string }) =>
+    request<void>("/api/admin/facilities", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateFacility: (
+    id: string,
+    input: { name?: string; addressLine?: string; description?: string; isActive?: boolean },
+  ) =>
     request<void>(`/api/admin/facilities/${id}`, {
       method: "PUT",
       body: JSON.stringify(input),
     }),
-  deactivateFacility: (id: string) => request<void>(`/api/admin/facilities/${id}`, { method: "DELETE" }),
+  deactivateFacility: (id: string) =>
+    request<void>(`/api/admin/facilities/${id}`, { method: "DELETE" }),
 
-  // Events
   getEvents: (params?: {
     from?: string;
     to?: string;
@@ -168,23 +193,32 @@ export const api = {
     if (params?.locationType) search.set("locationType", params.locationType);
     if (params?.limit != null) search.set("limit", String(params.limit));
     if (params?.offset != null) search.set("offset", String(params.offset));
+
     const qs = search.toString();
     return request<{ events: EventRecord[]; total: number }>(`/api/events${qs ? `?${qs}` : ""}`);
   },
   getMyEvents: () => request<{ upcoming: EventRecord[]; past: EventRecord[] }>("/api/my-events"),
-  createEvent: (input: any) => request<void>("/api/events", { method: "POST", body: JSON.stringify(input) }),
+  createEvent: (input: CreateEventInput) =>
+    request<{ message: string; eventId: string }>("/api/events", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   joinEvent: (id: string) => request<void>(`/api/events/${id}/join`, { method: "POST" }),
-  withdrawEvent: (id: string) => request<void>(`/api/events/${id}/withdraw`, { method: "POST" }),
+  withdrawEvent: (id: string) =>
+    request<void>(`/api/events/${id}/withdraw`, { method: "POST" }),
   cancelEvent: (id: string) => request<void>(`/api/events/${id}/cancel`, { method: "POST" }),
   likeEvent: (id: string) => request<void>(`/api/events/${id}/like`, { method: "POST" }),
 
-  // Badges
   getBadgeTypes: () => request<{ badgeTypes: BadgeType[] }>("/api/badge-types"),
-  submitBadgeApp: (input: {badgeTypeId: string, message: string}) => request<void>("/api/badge-applications", { 
-      method: "POST", body: JSON.stringify(input) 
-  }),
+  submitBadgeApp: (input: { badgeTypeId: string; message: string }) =>
+    request<void>("/api/badge-applications", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   getBadgeApps: () => request<{ applications: BadgeAppRecord[] }>("/api/admin/badge-applications"),
-  reviewBadgeApp: (id: string, status: string) => request<void>(`/api/admin/badge-applications/${id}/review`, { 
-      method: "POST", body: JSON.stringify({status}) 
-  }),
+  reviewBadgeApp: (id: string, status: string) =>
+    request<void>(`/api/admin/badge-applications/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    }),
 };

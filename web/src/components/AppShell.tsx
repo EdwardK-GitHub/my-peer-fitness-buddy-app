@@ -6,12 +6,12 @@ import { queryClient } from "../lib/queryClient";
 
 function navClass({ isActive }: { isActive: boolean }) {
   return isActive
-    ? "rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-    : "rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200";
+    ? "rounded-xl bg-slate-900 px-3 py-2 text-sm font-bold text-white"
+    : "rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100";
 }
 
 export function AppShell() {
-  // The shell keeps navigation, session state, and sign-out actions in one place.
+  // The shell centralizes navigation and session display for students and admins.
   const navigate = useNavigate();
   const userSession = useQuery({ queryKey: ["session", "user"], queryFn: api.getUserSession });
   const adminSession = useQuery({ queryKey: ["session", "admin"], queryFn: api.getAdminSession });
@@ -24,6 +24,7 @@ export function AppShell() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["session", "user"] });
+      await queryClient.invalidateQueries({ queryKey: ["my-events"] });
       navigate("/");
     },
   });
@@ -43,12 +44,12 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto flex max-w-6xl flex-col justify-between gap-4 px-6 py-4 md:flex-row md:items-center">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">
               Peer Fitness Buddy App
             </p>
-            <h1 className="text-lg font-semibold text-slate-900">Team workspace</h1>
+            <h1 className="text-xl font-bold text-slate-900">Campus fitness hub</h1>
           </div>
 
           <nav className="flex flex-wrap items-center gap-2">
@@ -79,16 +80,16 @@ export function AppShell() {
           {userSession.data?.authenticated ? (
             <span>Signed in as {userSession.data.user?.fullName}</span>
           ) : adminSession.data?.authenticated ? (
-            <span>Admin session: {adminSession.data.admin?.fullName}</span>
+            <span>Admin: {adminSession.data.admin?.fullName}</span>
           ) : (
-            <span>Not signed in</span>
+            <span>Sign in to post, join, and manage events.</span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
           {userSession.data?.authenticated ? (
             <button
-              className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700 hover:bg-slate-100"
+              className="rounded-xl border border-slate-300 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-100"
               onClick={() => logoutUser.mutate()}
               type="button"
             >
@@ -98,7 +99,7 @@ export function AppShell() {
 
           {adminSession.data?.authenticated ? (
             <button
-              className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700 hover:bg-slate-100"
+              className="rounded-xl border border-slate-300 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-100"
               onClick={() => logoutAdmin.mutate()}
               type="button"
             >

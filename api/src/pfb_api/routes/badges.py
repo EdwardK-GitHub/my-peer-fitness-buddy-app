@@ -10,15 +10,16 @@ from ..http import HTTPError, Request, json_response
 from ..models import BadgeApplication, BadgeType, UserBadge, utc_now
 from ..security import require_admin, require_user
 
-# FReq 6: Keep badge application text useful but bounded for production use.
+MIN_APPLICATION_MESSAGE_LENGTH = 20
 MAX_APPLICATION_MESSAGE_LENGTH = 2000
+MAX_DECISION_NOTES_LENGTH = 1000
 VALID_REVIEW_STATUSES = {"approved", "denied"}
 
 
 def _serialize_badge_type(badge_type: BadgeType) -> dict[str, Any]:
     """Serialize a badge type that students can apply for.
 
-    FReq 6.1: Students need selectable badge types before submitting an application.
+    FReq 6.1: students need selectable badge types before submitting an application.
     """
     return {
         "id": badge_type.id,
@@ -35,8 +36,8 @@ def _serialize_application(
 ) -> dict[str, Any]:
     """Serialize a badge application for student or admin screens.
 
-    FReq 6.2: Every application exposes its status.
-    FReq 6.3: Admins can view submitted applications and their details.
+    FReq 6.2: every application exposes its status.
+    FReq 6.3: admins can view submitted applications and their details.
     """
     payload: dict[str, Any] = {
         "id": application.id,
@@ -57,10 +58,48 @@ def _serialize_application(
     return payload
 
 
+def _validate_application_message(value: Any) -> str:
+    """Validate the student's trust badge application explanation.
+
+    FReq 6.1: users submit forms for trust badges. A short but meaningful explanation helps admins
+    make a manual review decision.
+    """
+    message = str(value or "").strip()
+
+    if len(message) < MIN_APPLICATION_MESSAGE_LENGTH:
+        raise HTTPError(
+            HTTPStatus.BAD_REQUEST,
+            f"Application message must be at least {MIN_APPLICATION_MESSAGE_LENGTH} characters",
+        )
+
+    if len(message) > MAX_APPLICATION_MESSAGE_LENGTH:
+        raise HTTPError(
+            HTTPStatus.BAD_REQUEST,
+            f"Application message must be {MAX_APPLICATION_MESSAGE_LENGTH} characters or fewer",
+        )
+
+    return message
+
+
+def _validate_decision_notes(value: Any) -> str | None:
+    """Validate optional admin notes for the application decision."""
+    notes = str(value or "").strip()
+    if not notes:
+        return None
+
+    if len(notes) > MAX_DECISION_NOTES_LENGTH:
+        raise HTTPError(
+            HTTPStatus.BAD_REQUEST,
+            f"Decision notes must be {MAX_DECISION_NOTES_LENGTH} characters or fewer",
+        )
+
+    return notes
+
+
 def list_badge_types(request: Request, start_response, db: DbSession):
     """Return active badge types available for applications.
 
-    FReq 6.1: Users can choose a trust badge type from the application form.
+    FReq 6.1: users can choose a trust badge type from the application form.
     """
     badge_types = db.scalars(
         select(BadgeType)
@@ -78,7 +117,7 @@ def list_badge_types(request: Request, start_response, db: DbSession):
 def list_applications_user(request: Request, start_response, db: DbSession):
     """Return the signed-in user's badge applications.
 
-    FReq 6.2: Students can see whether each application is submitted, approved, or denied.
+    FReq 6.2: students can see whether each application is submitted, approved, or denied.
     """
     auth = require_user(db, request)
 
@@ -104,8 +143,8 @@ def list_applications_user(request: Request, start_response, db: DbSession):
 def list_applications_admin(request: Request, start_response, db: DbSession):
     """Return badge applications for admin review.
 
-    FReq 6.3: Admins can view submitted applications and their details.
-    FReq 6.6: This route is restricted to admin users only.
+    FReq 6.3: admins can view submitted applications and their details.
+    FReq 6.6: this route is restricted to admin users only.
     """
     require_admin(db, request)
 
@@ -118,7 +157,6 @@ def list_applications_admin(request: Request, start_response, db: DbSession):
         .order_by(BadgeApplication.created_at.desc())
     ).all()
 
-    # Submitted applications stay at the top because they require admin action.
     applications = sorted(
         applications,
         key=lambda application: (
@@ -142,26 +180,17 @@ def list_applications_admin(request: Request, start_response, db: DbSession):
 def submit_application(request: Request, start_response, db: DbSession):
     """Submit a trust badge application for the signed-in student.
 
-    FReq 6.1: The route stores a student's badge application form.
-    FReq 6.2: New applications are recorded with status submitted.
+    FReq 6.1: the route stores a student's badge application form.
+    FReq 6.2: new applications are recorded with status submitted.
     """
     auth = require_user(db, request)
     body = request.json_body or {}
 
     badge_type_id = str(body.get("badgeTypeId") or "").strip()
-    message = str(body.get("message") or "").strip()
+    message = _validate_application_message(body.get("message"))
 
     if not badge_type_id:
         raise HTTPError(HTTPStatus.BAD_REQUEST, "Choose a badge before submitting the application")
-
-    if not message:
-        raise HTTPError(HTTPStatus.BAD_REQUEST, "Application message is required")
-
-    if len(message) > MAX_APPLICATION_MESSAGE_LENGTH:
-        raise HTTPError(
-            HTTPStatus.BAD_REQUEST,
-            f"Application message must be {MAX_APPLICATION_MESSAGE_LENGTH} characters or fewer",
-        )
 
     badge_type = db.scalar(
         select(BadgeType).where(
@@ -218,16 +247,16 @@ def submit_application(request: Request, start_response, db: DbSession):
 def review_application(request: Request, start_response, db: DbSession):
     """Approve or deny a submitted badge application.
 
-    FReq 6.4: Admins manually approve or deny each submitted application.
-    FReq 6.5: Approved applications grant a badge that appears on that user's events.
-    FReq 6.6: Review actions are restricted to admin users only.
+    FReq 6.4: admins manually approve or deny each submitted application.
+    FReq 6.5: approved applications grant a badge that appears on that user's events.
+    FReq 6.6: review actions are restricted to admin users only.
     """
     auth = require_admin(db, request)
     app_id = request.path_params.get("id")
     body = request.json_body or {}
 
     decision = str(body.get("status") or "").strip().lower()
-    decision_notes = str(body.get("decisionNotes") or "").strip() or None
+    decision_notes = _validate_decision_notes(body.get("decisionNotes"))
 
     if decision not in VALID_REVIEW_STATUSES:
         raise HTTPError(HTTPStatus.BAD_REQUEST, "Review decision must be approved or denied")

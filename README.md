@@ -24,7 +24,7 @@
 - **Argon2-cffi**: Hashes user and admin passwords securely using modern cryptographic standards.
 
 ### Database
-- **PostgreSQL**: Stores all persistent relational data for users, events, facilities, and settings.
+- **PostgreSQL**: Stores all persistent relational data for users, events, facilities, settings, event likes, and trust badge workflows.
 
 ### Deployment & Tooling
 - **Vercel**: Hosts the frontend React application globally on a fast edge network.
@@ -80,7 +80,7 @@
 - **`web/src/lib/datetime.ts`**: Provides shared date/time conversion and formatting helpers for event flows.
 - **`web/src/components/AppShell.tsx`**: Provides the shared layout, navigation, and shell used across the frontend.
 - **`web/src/components/InlineNotice.tsx`**: Displays production-style success, error, and informational messages.
-- **`web/src/components/ConfirmActionDialog.tsx`**: Provides reusable confirmation dialogs for event management actions.
+- **`web/src/components/ConfirmActionDialog.tsx`**: Provides reusable confirmation dialogs for event, facility, and badge-review actions.
 - **`web/src/components/LocationSelector.tsx`**: Renders the interactive Leaflet map for outdoor run selections.
 - **`web/src/components/ProtectedAdminRoute.tsx`**: Protects routes ensuring only authenticated admins can access them.
 - **`web/src/components/ProtectedUserRoute.tsx`**: Protects routes ensuring only authenticated users can access them.

@@ -173,7 +173,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
 
-    # 12. App Settings Table (THIS FIXES THE ERROR)
+    # 12. App Settings Table
     op.create_table(
         "app_settings",
         sa.Column("key", sa.String(length=64), primary_key=True),
@@ -183,7 +183,7 @@ def upgrade() -> None:
     )
 
 def downgrade() -> None:
-    op.drop_table("app_settings") # Add this line
+    op.drop_table("app_settings")
     op.drop_table("audit_logs")
     op.drop_table("user_badges")
     op.drop_table("badge_applications")

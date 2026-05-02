@@ -606,6 +606,10 @@ def like_event(request: Request, start_response, db: DbSession):
     if event is None or not _event_is_past(event):
         raise HTTPError(HTTPStatus.BAD_REQUEST, "Only past events can be liked")
 
+    # FReq 5.5: canceled events are not valid completed sessions for social validation.
+    if event.status == "canceled":
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Canceled events cannot be liked")
+
     if not any(attendance.user_id == auth.user.id for attendance in event.attendees):
         raise HTTPError(HTTPStatus.FORBIDDEN, "Only attendees can like this event")
 

@@ -332,6 +332,7 @@ export function MyEventsPage() {
       </div>
 
       <ConfirmActionDialog
+        cancelLabel={pendingAction?.kind === "cancel" ? "Keep event" : "Stay joined"}
         confirmLabel={pendingAction?.kind === "cancel" ? "Cancel event" : "Withdraw"}
         description={
           pendingAction?.kind === "cancel"

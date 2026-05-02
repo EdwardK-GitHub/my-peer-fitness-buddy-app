@@ -3,8 +3,9 @@ export type ConfirmActionDialogProps = {
   title: string;
   description: string;
   confirmLabel: string;
+  cancelLabel?: string;
   loading?: boolean;
-  tone?: "danger" | "neutral";
+  tone?: "danger" | "neutral" | "success";
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -14,6 +15,7 @@ export function ConfirmActionDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel = "Cancel",
   loading = false,
   tone = "neutral",
   onCancel,
@@ -26,7 +28,9 @@ export function ConfirmActionDialog({
   const confirmClasses =
     tone === "danger"
       ? "bg-rose-600 text-white hover:bg-rose-700"
-      : "bg-slate-900 text-white hover:bg-slate-800";
+      : tone === "success"
+        ? "bg-emerald-600 text-white hover:bg-emerald-700"
+        : "bg-slate-900 text-white hover:bg-slate-800";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
@@ -41,7 +45,7 @@ export function ConfirmActionDialog({
             onClick={onCancel}
             type="button"
           >
-            Keep event
+            {cancelLabel}
           </button>
           <button
             className={`rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-60 ${confirmClasses}`}

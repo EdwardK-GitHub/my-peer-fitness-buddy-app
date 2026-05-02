@@ -342,6 +342,13 @@ export function BadgesPage() {
                 <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm leading-6 text-slate-600">
                   {application.message}
                 </p>
+
+                {application.decisionNotes ? (
+                  <p className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-600">
+                    <span className="font-bold text-slate-800">Decision notes:</span>{" "}
+                    {application.decisionNotes}
+                  </p>
+                ) : null}
               </article>
             ))}
 

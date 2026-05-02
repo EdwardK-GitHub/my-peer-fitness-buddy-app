@@ -42,6 +42,12 @@ export type Facility = {
   isActive?: boolean;
 };
 
+export type FacilityInput = {
+  name: string;
+  addressLine?: string;
+  description?: string;
+};
+
 export type EventRecord = {
   id: string;
   activityType: string;
@@ -160,28 +166,30 @@ export const api = {
 
   getSettings: () => request<{ regionLimit: string }>("/api/settings"),
   updateSettings: (regionLimit: string) =>
-    request<void>("/api/admin/settings", {
+    request<{ message: string; regionLimit: string }>("/api/admin/settings", {
       method: "PUT",
       body: JSON.stringify({ regionLimit }),
     }),
 
   getFacilities: () => request<{ facilities: Facility[] }>("/api/facilities"),
   getAdminFacilities: () => request<{ facilities: Facility[] }>("/api/admin/facilities"),
-  createFacility: (input: { name: string; addressLine: string }) =>
-    request<void>("/api/admin/facilities", {
+  createFacility: (input: FacilityInput) =>
+    request<{ message: string; facility: Facility }>("/api/admin/facilities", {
       method: "POST",
       body: JSON.stringify(input),
     }),
   updateFacility: (
     id: string,
-    input: { name?: string; addressLine?: string; description?: string; isActive?: boolean },
+    input: Partial<FacilityInput> & { isActive?: boolean },
   ) =>
-    request<void>(`/api/admin/facilities/${id}`, {
+    request<{ message: string; facility: Facility }>(`/api/admin/facilities/${id}`, {
       method: "PUT",
       body: JSON.stringify(input),
     }),
   deactivateFacility: (id: string) =>
-    request<void>(`/api/admin/facilities/${id}`, { method: "DELETE" }),
+    request<{ message: string; facility: Facility }>(`/api/admin/facilities/${id}`, {
+      method: "DELETE",
+    }),
 
   getEvents: (params?: {
     from?: string;
@@ -222,9 +230,12 @@ export const api = {
       body: JSON.stringify(input),
     }),
   getBadgeApps: () => request<{ applications: BadgeAppRecord[] }>("/api/admin/badge-applications"),
-  reviewBadgeApp: (id: string, status: "approved" | "denied") =>
+  reviewBadgeApp: (
+    id: string,
+    input: { status: "approved" | "denied"; decisionNotes?: string },
+  ) =>
     request<{ message: string; status: string }>(`/api/admin/badge-applications/${id}/review`, {
       method: "POST",
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(input),
     }),
 };

@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, MapPin, Pencil, Plus, ShieldAlert, Trash2, XCircle } from "lucide-react";
 
+import { BadgeTypeManager } from "../components/admin/BadgeTypeManager";
 import { ConfirmActionDialog } from "../components/ConfirmActionDialog";
 import { InlineNotice } from "../components/InlineNotice";
 import { ApiError, api, type BadgeAppRecord, type Facility } from "../lib/api";
@@ -394,6 +395,8 @@ export function AdminDashboardPage() {
               ) : null}
             </div>
           </section>
+
+          <BadgeTypeManager />
         </div>
 
         <section className="h-fit rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

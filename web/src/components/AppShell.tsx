@@ -82,12 +82,9 @@ export function AppShell() {
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-slate-300">
               <Dumbbell size={21} />
             </div>
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-600">
-                Peer Fitness
-              </p>
-              <p className="text-lg font-black leading-tight text-slate-950">Buddy App</p>
-            </div>
+            <p className="text-lg font-black leading-tight text-slate-950">
+              Peer Fitness Buddy
+            </p>
           </Link>
 
           <nav className="flex flex-wrap items-center gap-2 rounded-full border border-slate-200 bg-white/80 p-1 shadow-sm">

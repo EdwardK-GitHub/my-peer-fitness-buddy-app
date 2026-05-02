@@ -1,7 +1,8 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Clock, MapPin, Search, UserPlus, X } from "lucide-react";
+import { Clock, MapPin, Search, UserPlus, X } from "lucide-react";
 
+import { BadgePills } from "../components/BadgePills";
 import { InlineNotice } from "../components/InlineNotice";
 import { LocationSelector } from "../components/LocationSelector";
 import { ApiError, api, type CreateEventInput, type EventRecord } from "../lib/api";
@@ -549,11 +550,7 @@ export function EventsPage() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-xl font-bold text-slate-900">{event.activityType}</h3>
-                      {event.host.badges?.includes("peer_trainer") ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
-                          <CheckCircle2 size={14} /> Peer Trainer
-                        </span>
-                      ) : null}
+                      <BadgePills badges={event.host.badges} />
                     </div>
 
                     <p className="mt-2 text-sm font-medium text-slate-600">

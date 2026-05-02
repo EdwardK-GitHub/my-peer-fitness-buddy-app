@@ -1,4 +1,4 @@
-# Peer Fitness Buddy App
+# Peer Fitness Buddy
 
 ## 1. Tech Stack
 
@@ -79,9 +79,11 @@
 - **`web/src/lib/queryClient.ts`**: Configures the shared TanStack Query client for data fetching.
 - **`web/src/lib/datetime.ts`**: Provides shared date/time conversion and formatting helpers for event flows.
 - **`web/src/components/AppShell.tsx`**: Provides the shared layout, navigation, and shell used across the frontend.
+- **`web/src/components/BadgePills.tsx`**: Displays approved active trust badges on event cards.
 - **`web/src/components/InlineNotice.tsx`**: Displays production-style success, error, and informational messages.
 - **`web/src/components/ConfirmActionDialog.tsx`**: Provides reusable confirmation dialogs for event, facility, and badge-review actions.
 - **`web/src/components/LocationSelector.tsx`**: Renders the interactive Leaflet map for outdoor run selections.
+- **`web/src/components/admin/BadgeTypeManager.tsx`**: Lets admins create, edit, delete, and restore trust badge types.
 - **`web/src/components/ProtectedAdminRoute.tsx`**: Protects routes ensuring only authenticated admins can access them.
 - **`web/src/components/ProtectedUserRoute.tsx`**: Protects routes ensuring only authenticated users can access them.
 - **`web/src/pages/`**: Contains the primary React view components for each distinct route.

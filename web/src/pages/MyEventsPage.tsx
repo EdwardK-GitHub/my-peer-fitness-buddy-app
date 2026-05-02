@@ -13,6 +13,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { BadgePills } from "../components/BadgePills";
 import { ConfirmActionDialog } from "../components/ConfirmActionDialog";
 import { InlineNotice } from "../components/InlineNotice";
 import { ApiError, api, type EventRecord } from "../lib/api";
@@ -213,6 +214,7 @@ export function MyEventsPage() {
               <h4 className="text-lg font-bold text-slate-900">{event.activityType}</h4>
               {roleBadge(event)}
               {statusBadge(event)}
+              <BadgePills badges={event.host.badges} />
             </div>
 
             <p className="mt-2 text-sm font-medium text-slate-600">

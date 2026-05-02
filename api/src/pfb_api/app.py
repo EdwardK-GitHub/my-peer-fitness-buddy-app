@@ -51,6 +51,10 @@ ROUTES: list[tuple[str, re.Pattern[str], Handler]] = [
     ("POST", re.compile(r"^/api/events/(?P<id>[^/]+)/like$"), events.like_event),
 
     ("GET", re.compile(r"^/api/badge-types$"), badges.list_badge_types),
+    ("GET", re.compile(r"^/api/admin/badge-types$"), badges.list_badge_types_admin),
+    ("POST", re.compile(r"^/api/admin/badge-types$"), badges.create_badge_type),
+    ("PUT", re.compile(r"^/api/admin/badge-types/(?P<id>[^/]+)$"), badges.update_badge_type),
+    ("DELETE", re.compile(r"^/api/admin/badge-types/(?P<id>[^/]+)$"), badges.deactivate_badge_type),
     ("GET", re.compile(r"^/api/badge-applications$"), badges.list_applications_user),
     ("POST", re.compile(r"^/api/badge-applications$"), badges.submit_application),
     ("GET", re.compile(r"^/api/admin/badge-applications$"), badges.list_applications_admin),

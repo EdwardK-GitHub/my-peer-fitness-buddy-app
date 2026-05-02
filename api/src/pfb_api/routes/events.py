@@ -117,8 +117,16 @@ def _serialize_event(
     is_past = _event_is_past(event)
     is_active = _event_is_active(event)
 
-    # FReq 6.5 is included here because approved host badges are displayed on event cards.
-    host_badges = [badge.badge_type.code for badge in event.host.badges]
+    # FReq 6.5 is included here because approved active host badges are displayed on event cards.
+    # Inactive badge types are hidden so deleted badge types disappear from regular user screens.
+    host_badges = [
+        {
+            "code": badge.badge_type.code,
+            "displayName": badge.badge_type.display_name,
+        }
+        for badge in event.host.badges
+        if badge.badge_type.is_active
+    ]
 
     has_liked = (
         any(like.user_id == current_user_id for like in event.likes)

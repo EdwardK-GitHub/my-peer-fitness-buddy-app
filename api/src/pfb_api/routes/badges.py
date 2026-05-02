@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from http import HTTPStatus
 from typing import Any
 
@@ -10,22 +11,41 @@ from ..http import HTTPError, Request, json_response
 from ..models import BadgeApplication, BadgeType, UserBadge, utc_now
 from ..security import require_admin, require_user
 
+DEFAULT_BADGE_CODE = "peer_trainer"
+
 MIN_APPLICATION_MESSAGE_LENGTH = 20
 MAX_APPLICATION_MESSAGE_LENGTH = 2000
 MAX_DECISION_NOTES_LENGTH = 1000
+
+MAX_BADGE_DISPLAY_NAME_LENGTH = 120
+MAX_BADGE_DESCRIPTION_LENGTH = 1000
+
 VALID_REVIEW_STATUSES = {"approved", "denied"}
 
 
-def _serialize_badge_type(badge_type: BadgeType) -> dict[str, Any]:
-    """Serialize a badge type that students can apply for.
+def _badge_code_from_display_name(display_name: str) -> str:
+    """Create a stable badge code from the admin-facing badge display name.
 
-    FReq 6.1: students need selectable badge types before submitting an application.
+    FReq 6 uses badge types as selectable trust-badge options. The code is an internal stable
+    identifier, while display_name is what students and admins see on the screen.
+    """
+    code = re.sub(r"[^a-z0-9]+", "_", display_name.lower()).strip("_")
+    return code[:64]
+
+
+def _serialize_badge_type(badge_type: BadgeType) -> dict[str, Any]:
+    """Serialize a badge type for user and admin screens.
+
+    FReq 6.1: users need selectable active badge types before submitting an application.
+    Admin screens also use isActive so deleted badge types can be managed safely.
     """
     return {
         "id": badge_type.id,
         "code": badge_type.code,
         "displayName": badge_type.display_name,
         "description": badge_type.description,
+        "isActive": badge_type.is_active,
+        "isDefault": badge_type.code == DEFAULT_BADGE_CODE,
     }
 
 
@@ -45,6 +65,7 @@ def _serialize_application(
         "badgeTypeId": application.badge_type_id,
         "badgeTypeCode": application.badge_type.code,
         "badgeName": application.badge_type.display_name,
+        "badgeTypeActive": application.badge_type.is_active,
         "message": application.applicant_message or "",
         "decisionNotes": application.decision_notes,
         "createdAt": application.created_at.isoformat(),
@@ -56,6 +77,54 @@ def _serialize_application(
         payload["applicantEmail"] = application.user.email
 
     return payload
+
+
+def _validate_badge_display_name(value: Any) -> tuple[str, str]:
+    """Validate a badge type name and generate its internal code.
+
+    FReq 6.1: badge types must be understandable for students before they apply.
+    """
+    display_name = str(value or "").strip()
+
+    if not display_name:
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Badge name is required")
+
+    if len(display_name) > MAX_BADGE_DISPLAY_NAME_LENGTH:
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Badge name is too long")
+
+    code = _badge_code_from_display_name(display_name)
+    if not code:
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Badge name must include letters or numbers")
+
+    return display_name, code
+
+
+def _validate_badge_description(value: Any) -> str | None:
+    """Validate optional badge-type description text."""
+    description = str(value or "").strip()
+    if not description:
+        return None
+
+    if len(description) > MAX_BADGE_DESCRIPTION_LENGTH:
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Badge description is too long")
+
+    return description
+
+
+def _ensure_unique_badge_code(
+    db: DbSession,
+    *,
+    code: str,
+    current_badge_type_id: str | None = None,
+) -> None:
+    """Prevent duplicate badge types after name normalization."""
+    existing = db.scalar(select(BadgeType).where(BadgeType.code == code))
+
+    if existing is not None and existing.id != current_badge_type_id:
+        raise HTTPError(
+            HTTPStatus.CONFLICT,
+            "A badge type with this name already exists. Edit or restore the existing badge type.",
+        )
 
 
 def _validate_application_message(value: Any) -> str:
@@ -96,10 +165,42 @@ def _validate_decision_notes(value: Any) -> str | None:
     return notes
 
 
+def _deactivate_badge_type(
+    db: DbSession,
+    *,
+    badge_type: BadgeType,
+    reviewer_admin_id: str,
+) -> None:
+    """Safely delete a badge type by marking it inactive.
+
+    FReq 6 remains consistent because inactive badge types are hidden from new applications and
+    event badges. Submitted applications for the deleted badge are closed so admins do not approve
+    applications for a badge that is no longer available.
+    """
+    if badge_type.code == DEFAULT_BADGE_CODE:
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "The default Peer Trainer badge cannot be deleted")
+
+    badge_type.is_active = False
+
+    submitted_applications = db.scalars(
+        select(BadgeApplication).where(
+            BadgeApplication.badge_type_id == badge_type.id,
+            BadgeApplication.status == "submitted",
+        )
+    ).all()
+
+    for application in submitted_applications:
+        application.status = "denied"
+        application.reviewer_admin_id = reviewer_admin_id
+        application.decision_notes = "This badge type is no longer available."
+        application.reviewed_at = utc_now()
+
+
 def list_badge_types(request: Request, start_response, db: DbSession):
     """Return active badge types available for applications.
 
-    FReq 6.1: users can choose a trust badge type from the application form.
+    FReq 6.1: users can choose an active trust badge type from the application form.
+    Deleted badge types are intentionally hidden from regular users.
     """
     badge_types = db.scalars(
         select(BadgeType)
@@ -111,6 +212,138 @@ def list_badge_types(request: Request, start_response, db: DbSession):
         start_response,
         HTTPStatus.OK,
         {"badgeTypes": [_serialize_badge_type(badge_type) for badge_type in badge_types]},
+    )
+
+
+def list_badge_types_admin(request: Request, start_response, db: DbSession):
+    """Return all badge types for admin management.
+
+    FReq 6.6: badge-type management is restricted to admins.
+    """
+    require_admin(db, request)
+
+    badge_types = db.scalars(
+        select(BadgeType).order_by(BadgeType.is_active.desc(), BadgeType.display_name.asc())
+    ).all()
+
+    return json_response(
+        start_response,
+        HTTPStatus.OK,
+        {"badgeTypes": [_serialize_badge_type(badge_type) for badge_type in badge_types]},
+    )
+
+
+def create_badge_type(request: Request, start_response, db: DbSession):
+    """Create a new badge type that students can apply for.
+
+    FReq 6.1: users can submit trust badge applications for active badge types.
+    FReq 6.6: only admins can create badge types.
+    """
+    require_admin(db, request)
+
+    body = request.json_body or {}
+    display_name, code = _validate_badge_display_name(body.get("displayName"))
+    description = _validate_badge_description(body.get("description"))
+
+    _ensure_unique_badge_code(db, code=code)
+
+    badge_type = BadgeType(
+        code=code,
+        display_name=display_name,
+        description=description,
+        is_active=True,
+    )
+    db.add(badge_type)
+    db.commit()
+    db.refresh(badge_type)
+
+    return json_response(
+        start_response,
+        HTTPStatus.CREATED,
+        {
+            "message": "Badge type created",
+            "badgeType": _serialize_badge_type(badge_type),
+        },
+    )
+
+
+def update_badge_type(request: Request, start_response, db: DbSession):
+    """Update or restore an existing badge type.
+
+    FReq 6.6: only admins can update badge types.
+    The default Peer Trainer badge remains protected so it always exists as the baseline badge.
+    """
+    require_admin(db, request)
+
+    badge_type_id = request.path_params.get("id")
+    body = request.json_body or {}
+
+    badge_type = db.scalar(select(BadgeType).where(BadgeType.id == badge_type_id))
+    if badge_type is None:
+        raise HTTPError(HTTPStatus.NOT_FOUND, "Badge type not found")
+
+    if "displayName" in body:
+        display_name, code = _validate_badge_display_name(body.get("displayName"))
+
+        if badge_type.code == DEFAULT_BADGE_CODE and display_name != badge_type.display_name:
+            raise HTTPError(
+                HTTPStatus.BAD_REQUEST,
+                "The default Peer Trainer badge name cannot be changed",
+            )
+
+        if badge_type.code != DEFAULT_BADGE_CODE:
+            _ensure_unique_badge_code(db, code=code, current_badge_type_id=badge_type.id)
+            badge_type.code = code
+            badge_type.display_name = display_name
+
+    if "description" in body:
+        badge_type.description = _validate_badge_description(body.get("description"))
+
+    if "isActive" in body:
+        requested_active = bool(body.get("isActive"))
+
+        if not requested_active and badge_type.code == DEFAULT_BADGE_CODE:
+            raise HTTPError(HTTPStatus.BAD_REQUEST, "The default Peer Trainer badge cannot be deleted")
+
+        badge_type.is_active = requested_active
+
+    db.commit()
+    db.refresh(badge_type)
+
+    return json_response(
+        start_response,
+        HTTPStatus.OK,
+        {
+            "message": "Badge type updated",
+            "badgeType": _serialize_badge_type(badge_type),
+        },
+    )
+
+
+def deactivate_badge_type(request: Request, start_response, db: DbSession):
+    """Safely delete a custom badge type.
+
+    FReq 6 stays consistent because the badge type is hidden from user application options and from
+    event badge displays, while historical application records remain preserved.
+    """
+    auth = require_admin(db, request)
+
+    badge_type_id = request.path_params.get("id")
+    badge_type = db.scalar(select(BadgeType).where(BadgeType.id == badge_type_id))
+    if badge_type is None:
+        raise HTTPError(HTTPStatus.NOT_FOUND, "Badge type not found")
+
+    _deactivate_badge_type(db, badge_type=badge_type, reviewer_admin_id=auth.admin.id)
+    db.commit()
+    db.refresh(badge_type)
+
+    return json_response(
+        start_response,
+        HTTPStatus.OK,
+        {
+            "message": "Badge type deleted",
+            "badgeType": _serialize_badge_type(badge_type),
+        },
     )
 
 
@@ -271,6 +504,12 @@ def review_application(request: Request, start_response, db: DbSession):
 
     if application.status != "submitted":
         raise HTTPError(HTTPStatus.BAD_REQUEST, "This application has already been reviewed")
+
+    if decision == "approved" and not application.badge_type.is_active:
+        raise HTTPError(
+            HTTPStatus.BAD_REQUEST,
+            "This badge type has been deleted and cannot be approved",
+        )
 
     application.status = decision
     application.reviewer_admin_id = auth.admin.id

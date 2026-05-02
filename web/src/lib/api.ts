@@ -48,6 +48,11 @@ export type FacilityInput = {
   description?: string;
 };
 
+export type HostBadge = {
+  code: string;
+  displayName: string;
+};
+
 export type EventRecord = {
   id: string;
   activityType: string;
@@ -70,7 +75,7 @@ export type EventRecord = {
   canJoin: boolean;
   canWithdraw: boolean;
   canCancel: boolean;
-  host: { id: string; fullName: string; badges: string[] };
+  host: { id: string; fullName: string; badges: HostBadge[] };
   facility?: { id: string; name: string } | null;
   attendees?: { id: string; fullName: string }[];
 };
@@ -91,6 +96,8 @@ export type BadgeType = {
   code: string;
   displayName: string;
   description?: string | null;
+  isActive?: boolean;
+  isDefault?: boolean;
 };
 
 export type BadgeAppRecord = {
@@ -223,6 +230,24 @@ export const api = {
   likeEvent: (id: string) => request<void>(`/api/events/${id}/like`, { method: "POST" }),
 
   getBadgeTypes: () => request<{ badgeTypes: BadgeType[] }>("/api/badge-types"),
+  getAdminBadgeTypes: () => request<{ badgeTypes: BadgeType[] }>("/api/admin/badge-types"),
+  createBadgeType: (input: { displayName: string; description?: string }) =>
+    request<{ message: string; badgeType: BadgeType }>("/api/admin/badge-types", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateBadgeType: (
+    id: string,
+    input: { displayName?: string; description?: string; isActive?: boolean },
+  ) =>
+    request<{ message: string; badgeType: BadgeType }>(`/api/admin/badge-types/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  deleteBadgeType: (id: string) =>
+    request<{ message: string; badgeType: BadgeType }>(`/api/admin/badge-types/${id}`, {
+      method: "DELETE",
+    }),
   getMyBadgeApps: () => request<{ applications: BadgeAppRecord[] }>("/api/badge-applications"),
   submitBadgeApp: (input: { badgeTypeId: string; message: string }) =>
     request<{ message: string; status: string; applicationId: string }>("/api/badge-applications", {

@@ -266,7 +266,7 @@ def ensure_sample_events(db, users: dict[str, User], facilities: dict[str, Facil
         status="active",
         location_type="running",
         location_label="Brooklyn Bridge Park, Brooklyn, NY",
-        location_details=json.dumps({"lat": 40.7003, "lng": -73.9967}),
+        location_details=json.dumps({"lat": 40.7003, "lng": -73.9967, "stateCode": "NY", "stateName": "New York"}),
         notes="Easy pace run near campus. Good for beginners.",
         attendees=[jordan],
     )
@@ -309,7 +309,7 @@ def ensure_sample_events(db, users: dict[str, User], facilities: dict[str, Facil
         status="active",
         location_type="running",
         location_label="Campus Track",
-        location_details=json.dumps({"lat": 40.6943, "lng": -73.9866}),
+        location_details=json.dumps({"lat": 40.6943, "lng": -73.9866, "stateCode": "NY", "stateName": "New York"}),
         notes="Past attended run used for My Events history.",
         attendees=[alex],
     )
@@ -330,6 +330,139 @@ def ensure_sample_events(db, users: dict[str, User], facilities: dict[str, Facil
 
     # FReq 5.3: Store a unary like associated with one attendee and one past event.
     add_like_if_missing(db, past_weight_room, maya)
+
+
+def ensure_pagination_test_data(
+    db,
+    *,
+    users: dict[str, User],
+    facilities: dict[str, Facility],
+    peer_trainer_badge: BadgeType,
+) -> list[User]:
+    """Seed extra local data so pagination controls can be tested.
+
+    FReq 2 and FReq 3 pages can grow large in real use, so local development needs enough event
+    records to verify numbered pagination. FReq 6 admin queues can also grow, so this seed creates
+    enough submitted badge applications to trigger queue pagination.
+    """
+    alex = users["alex@example.com"]
+    maya = users["maya@example.com"]
+    jordan = users["jordan@example.com"]
+
+    brooklyn_gym = facilities["brooklyn-athletic-facility"]
+    weight_room = facilities["weight-room"]
+
+    demo_users = [
+        upsert_user(
+            db,
+            full_name=f"Demo Student {index:02d}",
+            email=f"demo{index:02d}@example.com",
+            password="password123",
+        )
+        for index in range(1, 13)
+    ]
+
+    db.flush()
+
+    # Browse page pagination: these active upcoming events make /events exceed one page.
+    for index in range(1, 15):
+        host = alex if index % 3 == 0 else maya if index % 3 == 1 else jordan
+        facility = brooklyn_gym if index % 2 == 0 else weight_room
+        attendee = demo_users[(index - 1) % len(demo_users)]
+
+        upsert_event(
+            db,
+            host=host,
+            activity_type=f"Pagination Demo Workout {index:02d}",
+            scheduled_offset=timedelta(days=8 + index),
+            capacity=6,
+            status="active",
+            location_type="facility",
+            facility=facility,
+            notes="Extra seeded event used to verify paginated event lists.",
+            attendees=[attendee],
+        )
+
+    # My Events pagination for Alex: more than four upcoming hosted events.
+    for index in range(1, 7):
+        upsert_event(
+            db,
+            host=alex,
+            activity_type=f"Alex Hosted Upcoming Session {index:02d}",
+            scheduled_offset=timedelta(days=30 + index),
+            capacity=5,
+            status="active",
+            location_type="facility",
+            facility=brooklyn_gym,
+            notes="Seeded hosted event for My Events pagination testing.",
+            attendees=[demo_users[index - 1]],
+        )
+
+    # My Events pagination for Alex: more than four upcoming attended events.
+    for index in range(1, 7):
+        host = maya if index % 2 else jordan
+        upsert_event(
+            db,
+            host=host,
+            activity_type=f"Alex Joined Upcoming Session {index:02d}",
+            scheduled_offset=timedelta(days=45 + index),
+            capacity=5,
+            status="active",
+            location_type="facility",
+            facility=weight_room,
+            notes="Seeded attended event for My Events pagination testing.",
+            attendees=[alex],
+        )
+
+    # My Events pagination for Alex: more than four past hosted events.
+    for index in range(1, 7):
+        past_event = upsert_event(
+            db,
+            host=alex,
+            activity_type=f"Alex Past Hosted Session {index:02d}",
+            scheduled_offset=timedelta(days=-(10 + index)),
+            capacity=5,
+            status="active",
+            location_type="facility",
+            facility=brooklyn_gym,
+            notes="Seeded past hosted event for My Events pagination testing.",
+            attendees=[maya, jordan],
+        )
+        add_like_if_missing(db, past_event, maya)
+
+    # My Events pagination for Alex: more than four past attended events.
+    for index in range(1, 7):
+        host = demo_users[index - 1]
+        past_event = upsert_event(
+            db,
+            host=host,
+            activity_type=f"Alex Past Attended Session {index:02d}",
+            scheduled_offset=timedelta(days=-(30 + index)),
+            capacity=5,
+            status="active",
+            location_type="facility",
+            facility=weight_room,
+            notes="Seeded past attended event for My Events pagination testing.",
+            attendees=[alex],
+        )
+
+        if index % 2 == 0:
+            add_like_if_missing(db, past_event, alex)
+
+    # Badge queue pagination: more than five submitted applications for the admin queue.
+    for index, demo_user in enumerate(demo_users[:9], start=1):
+        upsert_badge_application(
+            db,
+            user=demo_user,
+            badge_type=peer_trainer_badge,
+            status="submitted",
+            message=(
+                f"I am Demo Student {index:02d}, and I want to help classmates join safe, "
+                "beginner-friendly workouts on campus."
+            ),
+        )
+
+    return demo_users
 
 
 def ensure_user_badge(db, *, user: User, badge_type: BadgeType, admin: Admin) -> None:
@@ -446,6 +579,12 @@ def main() -> None:
         db.flush()
 
         ensure_sample_events(db, users, facilities)
+        ensure_pagination_test_data(
+            db,
+            users=users,
+            facilities=facilities,
+            peer_trainer_badge=peer_trainer_badge,
+        )
         ensure_sample_badge_data(
             db,
             users=users,

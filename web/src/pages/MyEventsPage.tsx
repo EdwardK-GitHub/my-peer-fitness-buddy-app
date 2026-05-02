@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarCheck,
@@ -16,8 +16,12 @@ import {
 import { BadgePills } from "../components/BadgePills";
 import { ConfirmActionDialog } from "../components/ConfirmActionDialog";
 import { InlineNotice } from "../components/InlineNotice";
+import { PaginationControls } from "../components/PaginationControls";
 import { ApiError, api, type EventRecord } from "../lib/api";
 import { formatEventDateTime } from "../lib/datetime";
+import { clampPage, getPageCount, paginate } from "../lib/pagination";
+
+const EVENT_SECTION_PAGE_SIZE = 4;
 
 type NoticeState = {
   tone: "success" | "error" | "info";
@@ -40,11 +44,14 @@ type EventGroupProps = {
   icon: ReactNode;
   title: string;
   subtitle: string;
-  count: number;
+  totalCount: number;
+  page: number;
+  totalPages: number;
   emptyTitle: string;
   emptyDescription: string;
   accentClass: string;
   children: ReactNode;
+  onPageChange: (page: number) => void;
 };
 
 function splitByRole(events: EventRecord[] | undefined) {
@@ -92,11 +99,14 @@ function EventGroup({
   icon,
   title,
   subtitle,
-  count,
+  totalCount,
+  page,
+  totalPages,
   emptyTitle,
   emptyDescription,
   accentClass,
   children,
+  onPageChange,
 }: EventGroupProps) {
   return (
     <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
@@ -111,12 +121,22 @@ function EventGroup({
           </div>
         </div>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-          {count}
+          {totalCount}
         </span>
       </div>
 
-      {count > 0 ? (
-        <div className="space-y-4">{children}</div>
+      {totalCount > 0 ? (
+        <>
+          <div className="space-y-4">{children}</div>
+          <PaginationControls
+            currentPage={page}
+            itemLabel="events"
+            onPageChange={onPageChange}
+            pageSize={EVENT_SECTION_PAGE_SIZE}
+            totalItems={totalCount}
+            totalPages={totalPages}
+          />
+        </>
       ) : (
         <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-7 text-center">
           <p className="font-black text-slate-900">{emptyTitle}</p>
@@ -133,10 +153,58 @@ export function MyEventsPage() {
   const [notice, setNotice] = useState<NoticeState>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
+  const [upcomingHostedPage, setUpcomingHostedPage] = useState(0);
+  const [upcomingAttendingPage, setUpcomingAttendingPage] = useState(0);
+  const [pastHostedPage, setPastHostedPage] = useState(0);
+  const [pastAttendingPage, setPastAttendingPage] = useState(0);
+
   const myEvents = useQuery({ queryKey: ["my-events"], queryFn: api.getMyEvents });
 
-  const upcomingGroups = splitByRole(myEvents.data?.upcoming);
-  const pastGroups = splitByRole(myEvents.data?.past);
+  const upcomingGroups = useMemo(() => splitByRole(myEvents.data?.upcoming), [myEvents.data]);
+  const pastGroups = useMemo(() => splitByRole(myEvents.data?.past), [myEvents.data]);
+
+  const upcomingHostedPages = getPageCount(upcomingGroups.hosted.length, EVENT_SECTION_PAGE_SIZE);
+  const upcomingAttendingPages = getPageCount(
+    upcomingGroups.attending.length,
+    EVENT_SECTION_PAGE_SIZE,
+  );
+  const pastHostedPages = getPageCount(pastGroups.hosted.length, EVENT_SECTION_PAGE_SIZE);
+  const pastAttendingPages = getPageCount(pastGroups.attending.length, EVENT_SECTION_PAGE_SIZE);
+
+  useEffect(() => {
+    setUpcomingHostedPage((page) =>
+      clampPage(page, upcomingGroups.hosted.length, EVENT_SECTION_PAGE_SIZE),
+    );
+    setUpcomingAttendingPage((page) =>
+      clampPage(page, upcomingGroups.attending.length, EVENT_SECTION_PAGE_SIZE),
+    );
+    setPastHostedPage((page) => clampPage(page, pastGroups.hosted.length, EVENT_SECTION_PAGE_SIZE));
+    setPastAttendingPage((page) =>
+      clampPage(page, pastGroups.attending.length, EVENT_SECTION_PAGE_SIZE),
+    );
+  }, [
+    upcomingGroups.hosted.length,
+    upcomingGroups.attending.length,
+    pastGroups.hosted.length,
+    pastGroups.attending.length,
+  ]);
+
+  const upcomingHostedItems = paginate(
+    upcomingGroups.hosted,
+    upcomingHostedPage,
+    EVENT_SECTION_PAGE_SIZE,
+  );
+  const upcomingAttendingItems = paginate(
+    upcomingGroups.attending,
+    upcomingAttendingPage,
+    EVENT_SECTION_PAGE_SIZE,
+  );
+  const pastHostedItems = paginate(pastGroups.hosted, pastHostedPage, EVENT_SECTION_PAGE_SIZE);
+  const pastAttendingItems = paginate(
+    pastGroups.attending,
+    pastAttendingPage,
+    EVENT_SECTION_PAGE_SIZE,
+  );
 
   const cancelEventMutation = useMutation({
     mutationFn: api.cancelEvent,
@@ -379,26 +447,32 @@ export function MyEventsPage() {
         <div className="grid gap-5 xl:grid-cols-2">
           <EventGroup
             accentClass="bg-blue-100 text-blue-700"
-            count={upcomingGroups.hosted.length}
             emptyDescription="Events you create will appear here with attendee lists and host controls."
             emptyTitle="No upcoming hosted events"
             icon={<Trophy size={20} />}
+            onPageChange={setUpcomingHostedPage}
+            page={upcomingHostedPage}
             subtitle="Events you created and can manage as the host."
             title="Hosting"
+            totalCount={upcomingGroups.hosted.length}
+            totalPages={upcomingHostedPages}
           >
-            {upcomingGroups.hosted.map(renderUpcomingEvent)}
+            {upcomingHostedItems.map(renderUpcomingEvent)}
           </EventGroup>
 
           <EventGroup
             accentClass="bg-emerald-100 text-emerald-700"
-            count={upcomingGroups.attending.length}
             emptyDescription="Events you join from the Events page will appear here."
             emptyTitle="No upcoming attended events"
             icon={<UserCheck size={20} />}
+            onPageChange={setUpcomingAttendingPage}
+            page={upcomingAttendingPage}
             subtitle="Events you joined and can withdraw from when allowed."
             title="Attending"
+            totalCount={upcomingGroups.attending.length}
+            totalPages={upcomingAttendingPages}
           >
-            {upcomingGroups.attending.map(renderUpcomingEvent)}
+            {upcomingAttendingItems.map(renderUpcomingEvent)}
           </EventGroup>
         </div>
       </section>
@@ -417,26 +491,32 @@ export function MyEventsPage() {
         <div className="grid gap-5 xl:grid-cols-2">
           <EventGroup
             accentClass="bg-slate-100 text-slate-700"
-            count={pastGroups.hosted.length}
             emptyDescription="Past events you hosted will appear here after their scheduled time."
             emptyTitle="No past hosted events"
             icon={<Trophy size={20} />}
+            onPageChange={setPastHostedPage}
+            page={pastHostedPage}
             subtitle="Completed events where you were the host."
             title="Hosted"
+            totalCount={pastGroups.hosted.length}
+            totalPages={pastHostedPages}
           >
-            {pastGroups.hosted.map(renderPastEvent)}
+            {pastHostedItems.map(renderPastEvent)}
           </EventGroup>
 
           <EventGroup
             accentClass="bg-pink-100 text-pink-700"
-            count={pastGroups.attending.length}
             emptyDescription="Past events you attended will appear here, including like status."
             emptyTitle="No past attended events"
             icon={<Heart size={20} />}
+            onPageChange={setPastAttendingPage}
+            page={pastAttendingPage}
             subtitle="Completed events where you joined as an attendee."
             title="Attended"
+            totalCount={pastGroups.attending.length}
+            totalPages={pastAttendingPages}
           >
-            {pastGroups.attending.map(renderPastEvent)}
+            {pastAttendingItems.map(renderPastEvent)}
           </EventGroup>
         </div>
       </section>

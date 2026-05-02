@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ShieldAlert, XCircle } from "lucide-react";
 
 import { ApiError, api, type BadgeAppRecord } from "../../lib/api";
+import { clampPage, getPageCount, paginate } from "../../lib/pagination";
 import { InlineNotice } from "../InlineNotice";
+import { PaginationControls } from "../PaginationControls";
+
+const BADGE_QUEUE_PAGE_SIZE = 5;
 
 type NoticeState = {
   tone: "success" | "error" | "info";
@@ -40,12 +44,22 @@ export function BadgeApplicationQueue() {
   const badgeApps = useQuery({ queryKey: ["admin-badge-apps"], queryFn: api.getBadgeApps });
   const [notice, setNotice] = useState<NoticeState>(null);
   const [reviewDialog, setReviewDialog] = useState<ReviewDialogState | null>(null);
+  const [page, setPage] = useState(0);
 
   const sortedApplications = (badgeApps.data?.applications ?? []).slice().sort((a, b) => {
     if (a.status === "submitted" && b.status !== "submitted") return -1;
     if (a.status !== "submitted" && b.status === "submitted") return 1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
+
+  const totalPages = getPageCount(sortedApplications.length, BADGE_QUEUE_PAGE_SIZE);
+  const visibleApplications = paginate(sortedApplications, page, BADGE_QUEUE_PAGE_SIZE);
+
+  useEffect(() => {
+    setPage((currentPage) =>
+      clampPage(currentPage, sortedApplications.length, BADGE_QUEUE_PAGE_SIZE),
+    );
+  }, [sortedApplications.length]);
 
   const reviewMutation = useMutation({
     mutationFn: ({
@@ -92,10 +106,20 @@ export function BadgeApplicationQueue() {
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-900">
-        <ShieldAlert size={20} />
-        Badge application queue
-      </h3>
+      <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-start">
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+            <ShieldAlert size={20} />
+            Badge application queue
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Review submitted trust badge applications in manageable pages.
+          </p>
+        </div>
+        <span className="w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+          {sortedApplications.length} total
+        </span>
+      </div>
 
       {notice ? <InlineNotice tone={notice.tone}>{notice.message}</InlineNotice> : null}
 
@@ -106,7 +130,7 @@ export function BadgeApplicationQueue() {
       ) : null}
 
       <div className="mt-5 space-y-4">
-        {sortedApplications.map((application) => (
+        {visibleApplications.map((application) => (
           <article
             className={`rounded-2xl border p-5 ${
               application.status === "submitted"
@@ -195,6 +219,15 @@ export function BadgeApplicationQueue() {
           <p className="py-10 text-center text-sm text-slate-500">No applications in queue.</p>
         ) : null}
       </div>
+
+      <PaginationControls
+        currentPage={page}
+        itemLabel="applications"
+        onPageChange={setPage}
+        pageSize={BADGE_QUEUE_PAGE_SIZE}
+        totalItems={sortedApplications.length}
+        totalPages={totalPages}
+      />
 
       {reviewDialog ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">

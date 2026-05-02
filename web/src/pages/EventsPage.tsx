@@ -5,6 +5,7 @@ import { Clock, MapPin, Search, UserPlus, X } from "lucide-react";
 import { BadgePills } from "../components/BadgePills";
 import { InlineNotice } from "../components/InlineNotice";
 import { LocationSelector } from "../components/LocationSelector";
+import { PaginationControls } from "../components/PaginationControls";
 import { ApiError, api, type CreateEventInput, type EventRecord } from "../lib/api";
 import {
   datetimeLocalToUtcIso,
@@ -13,7 +14,7 @@ import {
   nowDateTimeLocalInput,
 } from "../lib/datetime";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 type CreateEventForm = {
   activityType: string;
@@ -633,31 +634,14 @@ export function EventsPage() {
               </div>
             ) : null}
 
-            {total > PAGE_SIZE ? (
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-xs font-medium text-slate-500">
-                  Page {page + 1} of {totalPages}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    disabled={page === 0}
-                    onClick={() => setPage((current) => Math.max(0, current - 1))}
-                    type="button"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    disabled={page + 1 >= totalPages}
-                    onClick={() => setPage((current) => current + 1)}
-                    type="button"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            ) : null}
+            <PaginationControls
+              currentPage={page}
+              itemLabel="upcoming events"
+              onPageChange={setPage}
+              pageSize={PAGE_SIZE}
+              totalItems={total}
+              totalPages={totalPages}
+            />
           </div>
         </div>
 

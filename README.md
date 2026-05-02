@@ -103,3 +103,7 @@
 - **`web/src/pages/AdminLocationsPage.tsx`**: Provides the dedicated admin location settings page.
 
 - **`web/src/pages/AdminBadgesPage.tsx`**: Provides the dedicated admin badge settings page.
+
+- **`web/src/components/PaginationControls.tsx`**: Provides reusable numbered pagination controls for event and admin lists.
+
+- **`web/src/lib/pagination.ts`**: Provides shared pagination helpers for client-side section pagination.

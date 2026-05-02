@@ -20,6 +20,7 @@ from pfb_api.models import (
     utc_now,
 )
 from pfb_api.security import hash_password, normalize_and_validate_email
+from pfb_api.us_states import ALLOWED_RUNNING_STATE_CODES_KEY, serialize_state_codes
 
 # These accounts are for local development and class demonstration only.
 SEED_USERS = [
@@ -141,12 +142,23 @@ def ensure_peer_trainer_badge(db) -> BadgeType:
 
 
 def ensure_settings(db) -> None:
-    """Create default application settings used by the running-location selector."""
-    existing = db.scalar(select(AppSetting).where(AppSetting.key == "running_region_limit"))
+    """Create default application settings used by the running-location selector.
+
+    FReq 4: admins manage the allowed states for outdoor-run locations. The seed keeps local
+    development predictable by allowing New York by default.
+    """
+    existing = db.scalar(
+        select(AppSetting).where(AppSetting.key == ALLOWED_RUNNING_STATE_CODES_KEY)
+    )
     if existing is None:
-        db.add(AppSetting(key="running_region_limit", value="New York State, US"))
+        db.add(
+            AppSetting(
+                key=ALLOWED_RUNNING_STATE_CODES_KEY,
+                value=serialize_state_codes(["NY"]),
+            )
+        )
     else:
-        existing.value = "New York State, US"
+        existing.value = serialize_state_codes(["NY"])
 
 
 def add_attendee_if_missing(db, event: Event, user: User) -> None:

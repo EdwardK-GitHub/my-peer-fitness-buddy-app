@@ -169,16 +169,6 @@ class UserBadge(TimestampMixin, Base):
     badge_type: Mapped[BadgeType] = relationship(back_populates="user_badges")
     granted_by_admin: Mapped[Admin | None] = relationship(back_populates="granted_badges")
 
-class AuditLog(TimestampMixin, Base):
-    __tablename__ = "audit_logs"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    actor_type: Mapped[str] = mapped_column(String(16), nullable=False)
-    actor_id: Mapped[str | None] = mapped_column(String(36))
-    action: Mapped[str] = mapped_column(String(120), nullable=False)
-    entity_type: Mapped[str] = mapped_column(String(120), nullable=False)
-    entity_id: Mapped[str | None] = mapped_column(String(36))
-    details_json: Mapped[str | None] = mapped_column(Text())
 
 # FReq 4: Admin settings for running region limits
 class AppSetting(TimestampMixin, Base):

@@ -159,21 +159,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("user_id", "badge_type_id", name="uq_user_badges_user_badge_type"),
     )
 
-    # 11. Audit Logs Table
-    op.create_table(
-        "audit_logs",
-        sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column("actor_type", sa.String(length=16), nullable=False),
-        sa.Column("actor_id", sa.String(length=36), nullable=True),
-        sa.Column("action", sa.String(length=120), nullable=False),
-        sa.Column("entity_type", sa.String(length=120), nullable=False),
-        sa.Column("entity_id", sa.String(length=36), nullable=True),
-        sa.Column("details_json", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-    )
-
-    # 12. App Settings Table
+    # 11. App Settings Table
     op.create_table(
         "app_settings",
         sa.Column("key", sa.String(length=64), primary_key=True),
@@ -184,7 +170,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("app_settings")
-    op.drop_table("audit_logs")
     op.drop_table("user_badges")
     op.drop_table("badge_applications")
     op.drop_table("event_likes")

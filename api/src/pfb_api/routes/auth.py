@@ -22,6 +22,7 @@ from ..security import (
 
 
 def _serialize_user(user: User, csrf_token: str | None = None) -> dict:
+    """Serialize the authenticated student account for the frontend."""
     payload = {
         "id": user.id,
         "email": user.email,
@@ -32,7 +33,24 @@ def _serialize_user(user: User, csrf_token: str | None = None) -> dict:
     return payload
 
 
+def _ensure_no_admin_session(db: DbSession, request: Request) -> None:
+    """Prevent simultaneous student and admin sessions in the same browser."""
+    admin_auth = load_auth_context(db, request, "admin")
+    if admin_auth is not None and admin_auth.admin is not None:
+        raise HTTPError(
+            HTTPStatus.CONFLICT,
+            "Sign out of the admin account before signing in as a student",
+        )
+
+
 def register(request: Request, start_response, db: DbSession):
+    """Register a student user account.
+
+    Student accounts are used for FReq 1, FReq 2, FReq 3, FReq 5, and student-side FReq 6.
+    Admin sessions cannot create or switch into student sessions.
+    """
+    _ensure_no_admin_session(db, request)
+
     body = request.json_body or {}
     full_name = str(body.get("fullName", "")).strip()
     email = str(body.get("email", "")).strip()
@@ -74,6 +92,12 @@ def register(request: Request, start_response, db: DbSession):
 
 
 def login(request: Request, start_response, db: DbSession):
+    """Sign in as a student user.
+
+    A browser that already has an admin session must sign out before starting a student session.
+    """
+    _ensure_no_admin_session(db, request)
+
     body = request.json_body or {}
     email = str(body.get("email", "")).strip()
     password = str(body.get("password", ""))
@@ -101,6 +125,7 @@ def login(request: Request, start_response, db: DbSession):
 
 
 def me(request: Request, start_response, db: DbSession):
+    """Return the current student session state."""
     auth = load_auth_context(db, request, "user")
     if auth is None or auth.user is None:
         return json_response(start_response, HTTPStatus.OK, {"authenticated": False, "user": None})
@@ -116,7 +141,11 @@ def me(request: Request, start_response, db: DbSession):
 
 
 def logout(request: Request, start_response, db: DbSession):
-    auth = require_user(db, request)
+    """Sign out of the current student session.
+
+    Logout remains allowed even if an old browser state accidentally contains both role cookies.
+    """
+    auth = require_user(db, request, allow_cross_role=True)
     require_csrf(request, auth.session)
     db.delete(auth.session)
     db.commit()

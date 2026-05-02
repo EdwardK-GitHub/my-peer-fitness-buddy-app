@@ -32,6 +32,7 @@ class AuthContext:
 
 
 def normalize_and_validate_email(value: str) -> tuple[str, str]:
+    """Normalize and validate email addresses before account lookup or account creation."""
     try:
         validated = validate_email(value.strip(), check_deliverability=False)
     except EmailNotValidError as exc:
@@ -41,18 +42,29 @@ def normalize_and_validate_email(value: str) -> tuple[str, str]:
 
 
 def hash_password(password: str) -> str:
+    """Hash a password using Argon2id."""
     return password_hasher.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
+    """Verify a plain password against the stored Argon2 password hash."""
     try:
         return password_hasher.verify(password_hash, password)
     except VerifyMismatchError:
         return False
 
 
-def create_session(db: DbSession, actor_type: ActorType, *, user: User | None = None, admin: Admin | None = None) -> tuple[Session, str]:
-    # Store only a hash of the random session token in the database.
+def create_session(
+    db: DbSession,
+    actor_type: ActorType,
+    *,
+    user: User | None = None,
+    admin: Admin | None = None,
+) -> tuple[Session, str]:
+    """Create a browser session for either a student user or an admin.
+
+    The raw token is only returned once to the browser. The database stores only the token hash.
+    """
     raw_token = secrets.token_urlsafe(48)
     csrf_token = secrets.token_urlsafe(32)
     expires_at = utc_now() + timedelta(hours=settings.session_ttl_hours)
@@ -72,10 +84,12 @@ def create_session(db: DbSession, actor_type: ActorType, *, user: User | None = 
 
 
 def hash_token(raw_token: str) -> str:
+    """Hash a browser session token before storing or looking it up."""
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
 def build_session_cookie_header(cookie_name: str, raw_token: str) -> tuple[str, str]:
+    """Build the secure HTTP-only session cookie header."""
     cookie = SimpleCookie()
     cookie[cookie_name] = raw_token
     cookie[cookie_name]["path"] = "/"
@@ -88,6 +102,7 @@ def build_session_cookie_header(cookie_name: str, raw_token: str) -> tuple[str, 
 
 
 def build_clear_cookie_header(cookie_name: str) -> tuple[str, str]:
+    """Build a cookie header that clears a session cookie from the browser."""
     cookie = SimpleCookie()
     cookie[cookie_name] = ""
     cookie[cookie_name]["path"] = "/"
@@ -101,7 +116,10 @@ def build_clear_cookie_header(cookie_name: str) -> tuple[str, str]:
 
 
 def load_auth_context(db: DbSession, request: Request, actor_type: ActorType) -> AuthContext | None:
-    # Resolve the current browser session from its cookie and database row.
+    """Resolve the current browser session for one actor type.
+
+    This function intentionally stays usable for both role checks and the session-status endpoints.
+    """
     cookie_name = (
         settings.session_cookie_name if actor_type == "user" else settings.admin_session_cookie_name
     )
@@ -129,14 +147,50 @@ def load_auth_context(db: DbSession, request: Request, actor_type: ActorType) ->
     return None
 
 
-def require_user(db: DbSession, request: Request) -> AuthContext:
+def require_user(
+    db: DbSession,
+    request: Request,
+    *,
+    allow_cross_role: bool = False,
+) -> AuthContext:
+    """Require an authenticated student user.
+
+    FReq 1, FReq 2, FReq 3, FReq 5, and the student side of FReq 6 are student actions.
+    Admin sessions are intentionally blocked from these user-only actions.
+    """
+    if not allow_cross_role:
+        admin_auth = load_auth_context(db, request, "admin")
+        if admin_auth is not None and admin_auth.admin is not None:
+            raise HTTPError(
+                HTTPStatus.FORBIDDEN,
+                "Sign out of the admin account before using student features",
+            )
+
     auth = load_auth_context(db, request, "user")
     if auth is None or auth.user is None:
         raise HTTPError(HTTPStatus.UNAUTHORIZED, "Authentication required")
     return auth
 
 
-def require_admin(db: DbSession, request: Request) -> AuthContext:
+def require_admin(
+    db: DbSession,
+    request: Request,
+    *,
+    allow_cross_role: bool = False,
+) -> AuthContext:
+    """Require an authenticated admin.
+
+    FReq 4 and the admin-review side of FReq 6 are admin-only actions.
+    Student sessions are intentionally blocked from these admin-only actions.
+    """
+    if not allow_cross_role:
+        user_auth = load_auth_context(db, request, "user")
+        if user_auth is not None and user_auth.user is not None:
+            raise HTTPError(
+                HTTPStatus.FORBIDDEN,
+                "Sign out of the student account before using admin features",
+            )
+
     auth = load_auth_context(db, request, "admin")
     if auth is None or auth.admin is None:
         raise HTTPError(HTTPStatus.UNAUTHORIZED, "Admin authentication required")
@@ -144,6 +198,7 @@ def require_admin(db: DbSession, request: Request) -> AuthContext:
 
 
 def require_csrf(request: Request, session: Session) -> None:
+    """Require a matching CSRF token for protected session-changing actions."""
     csrf_header = request.headers.get("X-Csrf-Token")
     if not csrf_header or csrf_header != session.csrf_token:
         raise HTTPError(HTTPStatus.FORBIDDEN, "Missing or invalid CSRF token")

@@ -1,41 +1,222 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ArrowRight,
+  CalendarCheck,
+  CheckCircle2,
+  Heart,
+  MapPin,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-react";
+
+import { api } from "../lib/api";
+
+function FeatureCard({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <article className="rounded-3xl border border-white/70 bg-white/85 p-6 shadow-xl shadow-slate-200/70 backdrop-blur">
+      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+        {icon}
+      </div>
+      <h3 className="text-lg font-black text-slate-950">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{children}</p>
+    </article>
+  );
+}
 
 export function HomePage() {
-  return (
-    <section className="grid gap-6 md:grid-cols-[1.3fr_1fr]">
-      <div className="rounded-3xl bg-slate-900 p-8 text-white shadow-sm">
-        <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-300">
-          College fitness coordination
-        </p>
-        <h2 className="mt-3 text-4xl font-bold leading-tight">
-          Find workout partners for gym sessions and outdoor runs.
-        </h2>
-        <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200">
-          Create events, join classmates, manage your schedule, and build safer fitness habits with
-          peers from your campus community.
-        </p>
+  const userSession = useQuery({ queryKey: ["session", "user"], queryFn: api.getUserSession });
+  const adminSession = useQuery({ queryKey: ["session", "admin"], queryFn: api.getAdminSession });
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link className="rounded-2xl bg-white px-5 py-3 font-bold text-slate-900" to="/events">
-            Browse events
-          </Link>
-          <Link
-            className="rounded-2xl border border-slate-600 px-5 py-3 font-bold text-white hover:bg-slate-800"
-            to="/register"
-          >
-            Create account
-          </Link>
+  const isStudent = userSession.data?.authenticated === true;
+  const isAdmin = adminSession.data?.authenticated === true && !isStudent;
+
+  const primaryCta = isAdmin
+    ? { label: "Open admin dashboard", to: "/admin/dashboard" }
+    : isStudent
+      ? { label: "Browse events", to: "/events" }
+      : { label: "Find a workout", to: "/events" };
+
+  const secondaryCta = isAdmin
+    ? { label: "Review badge queue", to: "/admin/dashboard" }
+    : isStudent
+      ? { label: "View my events", to: "/my-events" }
+      : { label: "Create account", to: "/register" };
+
+  return (
+    <section className="space-y-10">
+      <div className="relative overflow-hidden rounded-[2rem] border border-white/80 bg-slate-950 p-8 text-white shadow-2xl shadow-slate-300 md:p-12">
+        <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-blue-500/30 blur-3xl" />
+        <div className="absolute bottom-0 right-20 h-48 w-48 rounded-full bg-emerald-400/20 blur-3xl" />
+
+        <div className="relative grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+          <div>
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-blue-100">
+              <Sparkles size={16} />
+              Campus workouts feel easier with a buddy
+            </div>
+
+            <h1 className="max-w-4xl text-5xl font-black tracking-tight md:text-6xl">
+              Find reliable workout partners for gym sessions and outdoor runs.
+            </h1>
+
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
+              Peer Fitness Buddy helps students post events, join classmates, manage schedules,
+              and build safer fitness habits with people from the same campus community.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 font-black text-slate-950 shadow-lg shadow-black/20 transition hover:-translate-y-0.5"
+                to={primaryCta.to}
+              >
+                {primaryCta.label}
+                <ArrowRight size={18} />
+              </Link>
+              <Link
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 py-3 font-black text-white transition hover:bg-white/15"
+                to={secondaryCta.to}
+              >
+                {secondaryCta.label}
+              </Link>
+            </div>
+
+            <div className="mt-8 grid gap-3 text-sm font-semibold text-slate-300 sm:grid-cols-3">
+              <span className="inline-flex items-center gap-2">
+                <CheckCircle2 className="text-emerald-300" size={18} />
+                Time-range search
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <CheckCircle2 className="text-emerald-300" size={18} />
+                Host controls
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <CheckCircle2 className="text-emerald-300" size={18} />
+                Trust badges
+              </span>
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="rounded-[2rem] border border-white/15 bg-white/10 p-5 shadow-2xl backdrop-blur">
+              <div className="rounded-[1.5rem] bg-white p-5 text-slate-950">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">
+                      Upcoming event
+                    </p>
+                    <h2 className="mt-1 text-2xl font-black">Upper Body Gym Session</h2>
+                  </div>
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-700">
+                    Peer Trainer
+                  </span>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">
+                    <CalendarCheck className="text-blue-600" size={20} />
+                    <span className="text-sm font-bold">Tomorrow · 6:30 PM</span>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">
+                    <MapPin className="text-blue-600" size={20} />
+                    <span className="text-sm font-bold">Brooklyn Athletic Facility</span>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">
+                    <Users className="text-blue-600" size={20} />
+                    <span className="text-sm font-bold">3 / 4 participants</span>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-white">
+                  <p className="text-sm font-bold">Why students use it</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    Accountability, beginner comfort, safer meetups, and better use of campus
+                    fitness resources.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="rounded-3xl bg-white p-8 shadow-sm">
-        <h3 className="text-xl font-bold text-slate-900">What you can do</h3>
-        <ul className="mt-5 space-y-4 text-sm leading-6 text-slate-700">
-          <li>• Post facility workouts or outdoor runs with a clear time, capacity, and location.</li>
-          <li>• Search upcoming events by time range and join sessions with open spots.</li>
-          <li>• Track events you host or attend from your personal schedule.</li>
-          <li>• Apply for trust badges that help other students recognize approved peers.</li>
-        </ul>
+      <div className="grid gap-5 md:grid-cols-4">
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
+          <p className="text-3xl font-black text-slate-950">2</p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">event location types</p>
+        </div>
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
+          <p className="text-3xl font-black text-slate-950">6</p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">core SSDS requirements</p>
+        </div>
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
+          <p className="text-3xl font-black text-slate-950">1</p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">simple student schedule</p>
+        </div>
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
+          <p className="text-3xl font-black text-slate-950">Admin</p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">facility and badge oversight</p>
+        </div>
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-3">
+        <FeatureCard icon={<Users size={24} />} title="Create and join events">
+          Students can post facility workouts or outdoor runs, then classmates can browse by time
+          range and join events with available capacity.
+        </FeatureCard>
+
+        <FeatureCard icon={<MapPin size={24} />} title="Campus-aware locations">
+          Facility events use the admin-managed facility list, while running events use a detailed
+          location near the configured campus region.
+        </FeatureCard>
+
+        <FeatureCard icon={<ShieldCheck size={24} />} title="Trust badge review">
+          Students can apply for credibility badges, and admins manually approve or deny each
+          application before badges appear on posted events.
+        </FeatureCard>
+      </div>
+
+      <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm md:p-10">
+        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.2em] text-blue-600">
+              Built for real campus routines
+            </p>
+            <h2 className="mt-3 text-3xl font-black text-slate-950">
+              Simple enough for beginners, structured enough for hosts and admins.
+            </h2>
+            <p className="mt-4 text-sm leading-7 text-slate-600">
+              The app keeps student actions focused on events and badges, while admin accounts stay
+              dedicated to facility management and badge review.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-3xl bg-blue-50 p-5">
+              <Heart className="text-blue-600" size={24} />
+              <p className="mt-3 font-black text-slate-950">Like past sessions</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Attendees can give a simple like to past events they joined.
+              </p>
+            </div>
+            <div className="rounded-3xl bg-emerald-50 p-5">
+              <CalendarCheck className="text-emerald-600" size={24} />
+              <p className="mt-3 font-black text-slate-950">Manage your schedule</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Hosts can cancel upcoming events and attendees can withdraw when needed.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );

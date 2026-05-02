@@ -1,20 +1,30 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Dumbbell, ShieldCheck } from "lucide-react";
 
 import { api } from "../lib/api";
 import { queryClient } from "../lib/queryClient";
 
+type NavItem = {
+  label: string;
+  to: string;
+};
+
 function navClass({ isActive }: { isActive: boolean }) {
   return isActive
-    ? "rounded-xl bg-slate-900 px-3 py-2 text-sm font-bold text-white"
-    : "rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100";
+    ? "rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white shadow-sm"
+    : "rounded-full px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950";
 }
 
 export function AppShell() {
-  // The shell centralizes navigation and session display for students and admins.
+  // The shell is role-aware so students and admins see the navigation that matches their permissions.
   const navigate = useNavigate();
   const userSession = useQuery({ queryKey: ["session", "user"], queryFn: api.getUserSession });
   const adminSession = useQuery({ queryKey: ["session", "admin"], queryFn: api.getAdminSession });
+
+  const userAuthenticated = userSession.data?.authenticated === true;
+  const adminAuthenticated = adminSession.data?.authenticated === true;
+  const hasRoleConflict = userAuthenticated && adminAuthenticated;
 
   const logoutUser = useMutation({
     mutationFn: async () => {
@@ -37,79 +47,138 @@ export function AppShell() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["session", "admin"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-facilities"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-badge-apps"] });
       navigate("/");
     },
   });
 
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col justify-between gap-4 px-6 py-4 md:flex-row md:items-center">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">
-              Peer Fitness Buddy App
-            </p>
-            <h1 className="text-xl font-bold text-slate-900">Campus fitness hub</h1>
-          </div>
+  const guestLinks: NavItem[] = [
+    { label: "Home", to: "/" },
+    { label: "Events", to: "/events" },
+    { label: "Badges", to: "/badges" },
+  ];
 
-          <nav className="flex flex-wrap items-center gap-2">
-            <NavLink className={navClass} to="/">
-              Home
-            </NavLink>
-            <NavLink className={navClass} to="/events">
-              Events
-            </NavLink>
-            <NavLink className={navClass} to="/badges">
-              Badges
-            </NavLink>
-            <NavLink className={navClass} to="/dashboard">
-              Dashboard
-            </NavLink>
-            <NavLink className={navClass} to="/my-events">
-              My Events
-            </NavLink>
-            <NavLink className={navClass} to="/admin/login">
-              Admin
-            </NavLink>
+  const studentLinks: NavItem[] = [
+    { label: "Events", to: "/events" },
+    { label: "Badges", to: "/badges" },
+    { label: "Dashboard", to: "/dashboard" },
+    { label: "My Events", to: "/my-events" },
+  ];
+
+  const adminLinks: NavItem[] = [{ label: "Admin Dashboard", to: "/admin/dashboard" }];
+
+  const navLinks = adminAuthenticated && !userAuthenticated
+    ? adminLinks
+    : userAuthenticated && !adminAuthenticated
+      ? studentLinks
+      : guestLinks;
+
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,#dbeafe_0,#f8fafc_32rem,#f8fafc_100%)] text-slate-950">
+      <header className="sticky top-0 z-40 border-b border-white/70 bg-white/85 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <Link className="flex items-center gap-3" to="/">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-slate-300">
+              <Dumbbell size={21} />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-600">
+                Peer Fitness
+              </p>
+              <p className="text-lg font-black leading-tight text-slate-950">Buddy App</p>
+            </div>
+          </Link>
+
+          <nav className="flex flex-wrap items-center gap-2 rounded-full border border-slate-200 bg-white/80 p-1 shadow-sm">
+            {navLinks.map((item) => (
+              <NavLink className={navClass} key={item.to} to={item.to}>
+                {item.label}
+              </NavLink>
+            ))}
           </nav>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {userAuthenticated && !adminAuthenticated ? (
+              <>
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700">
+                  Student: {userSession.data?.user?.fullName}
+                </span>
+                <button
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+                  onClick={() => logoutUser.mutate()}
+                  type="button"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : null}
+
+            {adminAuthenticated && !userAuthenticated ? (
+              <>
+                <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700">
+                  <ShieldCheck size={16} />
+                  Admin: {adminSession.data?.admin?.fullName}
+                </span>
+                <button
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+                  onClick={() => logoutAdmin.mutate()}
+                  type="button"
+                >
+                  Admin sign out
+                </button>
+              </>
+            ) : null}
+
+            {!userAuthenticated && !adminAuthenticated ? (
+              <>
+                <Link
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+                  to="/login"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
+                  to="/register"
+                >
+                  Create account
+                </Link>
+              </>
+            ) : null}
+
+            {hasRoleConflict ? (
+              <>
+                <span className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700">
+                  Two sessions detected
+                </span>
+                <button
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+                  onClick={() => logoutUser.mutate()}
+                  type="button"
+                >
+                  Sign out student
+                </button>
+                <button
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+                  onClick={() => logoutAdmin.mutate()}
+                  type="button"
+                >
+                  Sign out admin
+                </button>
+              </>
+            ) : null}
+          </div>
         </div>
+
+        {hasRoleConflict ? (
+          <div className="border-t border-rose-100 bg-rose-50 px-6 py-3 text-center text-sm font-semibold text-rose-700">
+            Student and admin sessions cannot be used at the same time. Sign out of one role before continuing.
+          </div>
+        ) : null}
       </header>
 
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4 text-sm text-slate-600">
-        <div>
-          {userSession.data?.authenticated ? (
-            <span>Signed in as {userSession.data.user?.fullName}</span>
-          ) : adminSession.data?.authenticated ? (
-            <span>Admin: {adminSession.data.admin?.fullName}</span>
-          ) : (
-            <span>Sign in to post, join, and manage events.</span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {userSession.data?.authenticated ? (
-            <button
-              className="rounded-xl border border-slate-300 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-100"
-              onClick={() => logoutUser.mutate()}
-              type="button"
-            >
-              Sign out
-            </button>
-          ) : null}
-
-          {adminSession.data?.authenticated ? (
-            <button
-              className="rounded-xl border border-slate-300 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-100"
-              onClick={() => logoutAdmin.mutate()}
-              type="button"
-            >
-              Admin sign out
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      <main className="mx-auto max-w-6xl px-6 pb-10">
+      <main className="mx-auto max-w-7xl px-6 py-8">
         <Outlet />
       </main>
     </div>

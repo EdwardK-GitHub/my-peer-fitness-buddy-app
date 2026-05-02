@@ -21,6 +21,7 @@ from ..security import (
 
 
 def _serialize_admin(admin: Admin, csrf_token: str | None = None) -> dict:
+    """Serialize the authenticated admin account for the frontend."""
     payload = {
         "id": admin.id,
         "email": admin.email,
@@ -31,7 +32,24 @@ def _serialize_admin(admin: Admin, csrf_token: str | None = None) -> dict:
     return payload
 
 
+def _ensure_no_user_session(db: DbSession, request: Request) -> None:
+    """Prevent simultaneous student and admin sessions in the same browser."""
+    user_auth = load_auth_context(db, request, "user")
+    if user_auth is not None and user_auth.user is not None:
+        raise HTTPError(
+            HTTPStatus.CONFLICT,
+            "Sign out of the student account before signing in as an admin",
+        )
+
+
 def login(request: Request, start_response, db: DbSession):
+    """Sign in as an admin.
+
+    Admin accounts are only for FReq 4 facility/location management and FReq 6 badge review.
+    A browser that already has a student session must sign out before starting an admin session.
+    """
+    _ensure_no_user_session(db, request)
+
     body = request.json_body or {}
     email = str(body.get("email", "")).strip()
     password = str(body.get("password", ""))
@@ -59,6 +77,7 @@ def login(request: Request, start_response, db: DbSession):
 
 
 def me(request: Request, start_response, db: DbSession):
+    """Return the current admin session state."""
     auth = load_auth_context(db, request, "admin")
     if auth is None or auth.admin is None:
         return json_response(start_response, HTTPStatus.OK, {"authenticated": False, "admin": None})
@@ -74,7 +93,11 @@ def me(request: Request, start_response, db: DbSession):
 
 
 def logout(request: Request, start_response, db: DbSession):
-    auth = require_admin(db, request)
+    """Sign out of the current admin session.
+
+    Logout remains allowed even if an old browser state accidentally contains both role cookies.
+    """
+    auth = require_admin(db, request, allow_cross_role=True)
     require_csrf(request, auth.session)
     db.delete(auth.session)
     db.commit()

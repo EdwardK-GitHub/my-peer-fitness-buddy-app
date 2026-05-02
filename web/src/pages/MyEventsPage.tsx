@@ -1,6 +1,17 @@
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarCheck, CheckCircle2, Heart, LogOut, MapPin, Users, XCircle } from "lucide-react";
+import {
+  CalendarCheck,
+  CheckCircle2,
+  Heart,
+  LogOut,
+  MapPin,
+  Trophy,
+  UserCheck,
+  Users,
+  XCircle,
+} from "lucide-react";
 
 import { ConfirmActionDialog } from "../components/ConfirmActionDialog";
 import { InlineNotice } from "../components/InlineNotice";
@@ -23,6 +34,26 @@ type PendingAction =
       eventId: string;
       eventName: string;
     };
+
+type EventGroupProps = {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  count: number;
+  emptyTitle: string;
+  emptyDescription: string;
+  accentClass: string;
+  children: ReactNode;
+};
+
+function splitByRole(events: EventRecord[] | undefined) {
+  const safeEvents = events ?? [];
+
+  return {
+    hosted: safeEvents.filter((event) => event.isHost),
+    attending: safeEvents.filter((event) => !event.isHost),
+  };
+}
 
 function roleBadge(event: EventRecord) {
   if (event.isHost) {
@@ -56,14 +87,55 @@ function statusBadge(event: EventRecord) {
   );
 }
 
+function EventGroup({
+  icon,
+  title,
+  subtitle,
+  count,
+  emptyTitle,
+  emptyDescription,
+  accentClass,
+  children,
+}: EventGroupProps) {
+  return (
+    <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${accentClass}`}>
+            {icon}
+          </div>
+          <div>
+            <h4 className="text-lg font-black text-slate-950">{title}</h4>
+            <p className="mt-1 text-sm leading-6 text-slate-600">{subtitle}</p>
+          </div>
+        </div>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+          {count}
+        </span>
+      </div>
+
+      {count > 0 ? (
+        <div className="space-y-4">{children}</div>
+      ) : (
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-7 text-center">
+          <p className="font-black text-slate-900">{emptyTitle}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{emptyDescription}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function MyEventsPage() {
   const queryClient = useQueryClient();
 
   const [notice, setNotice] = useState<NoticeState>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
-  const session = useQuery({ queryKey: ["session", "user"], queryFn: api.getUserSession });
   const myEvents = useQuery({ queryKey: ["my-events"], queryFn: api.getMyEvents });
+
+  const upcomingGroups = splitByRole(myEvents.data?.upcoming);
+  const pastGroups = splitByRole(myEvents.data?.past);
 
   const cancelEventMutation = useMutation({
     mutationFn: api.cancelEvent,
@@ -128,10 +200,10 @@ export function MyEventsPage() {
   function renderUpcomingEvent(event: EventRecord) {
     return (
       <article
-        className={`rounded-3xl border p-5 shadow-sm ${
+        className={`rounded-3xl border p-5 shadow-sm transition ${
           event.status === "canceled"
             ? "border-rose-200 bg-rose-50"
-            : "border-slate-200 bg-white hover:border-blue-200"
+            : "border-slate-200 bg-white hover:border-blue-200 hover:shadow-md"
         }`}
         key={event.id}
       >
@@ -281,8 +353,8 @@ export function MyEventsPage() {
         </p>
         <h2 className="mt-2 text-3xl font-bold text-slate-900">My Events</h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-          View events you are hosting or attending, manage upcoming participation, and review your
-          past fitness activity.
+          View hosted and joined events separately, manage upcoming participation, and review past
+          workout activity.
         </p>
       </div>
 
@@ -291,45 +363,81 @@ export function MyEventsPage() {
         <InlineNotice tone="error">{myEvents.error.message}</InlineNotice>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-3xl border-t-4 border-blue-500 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center gap-2">
-            <CalendarCheck className="text-blue-600" size={22} />
-            <h3 className="text-xl font-bold text-slate-900">Upcoming events</h3>
+      <section className="rounded-[2rem] border border-blue-100 bg-blue-50/60 p-5 shadow-sm">
+        <div className="mb-5 flex items-center gap-2">
+          <CalendarCheck className="text-blue-600" size={22} />
+          <div>
+            <h3 className="text-xl font-black text-slate-900">Upcoming events</h3>
+            <p className="text-sm text-slate-600">
+              Manage events you host separately from events you joined as an attendee.
+            </p>
           </div>
+        </div>
 
-          <div className="space-y-4">
-            {myEvents.data?.upcoming.map(renderUpcomingEvent)}
-            {myEvents.data?.upcoming.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center">
-                <h4 className="font-bold text-slate-900">No upcoming events</h4>
-                <p className="mt-2 text-sm text-slate-600">
-                  Join an event or post your own workout from the Events page.
-                </p>
-              </div>
-            ) : null}
-          </div>
-        </section>
+        <div className="grid gap-5 xl:grid-cols-2">
+          <EventGroup
+            accentClass="bg-blue-100 text-blue-700"
+            count={upcomingGroups.hosted.length}
+            emptyDescription="Events you create will appear here with attendee lists and host controls."
+            emptyTitle="No upcoming hosted events"
+            icon={<Trophy size={20} />}
+            subtitle="Events you created and can manage as the host."
+            title="Hosting"
+          >
+            {upcomingGroups.hosted.map(renderUpcomingEvent)}
+          </EventGroup>
 
-        <section className="rounded-3xl border-t-4 border-slate-300 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center gap-2">
-            <CheckCircle2 className="text-slate-600" size={22} />
-            <h3 className="text-xl font-bold text-slate-900">Past events</h3>
-          </div>
+          <EventGroup
+            accentClass="bg-emerald-100 text-emerald-700"
+            count={upcomingGroups.attending.length}
+            emptyDescription="Events you join from the Events page will appear here."
+            emptyTitle="No upcoming attended events"
+            icon={<UserCheck size={20} />}
+            subtitle="Events you joined and can withdraw from when allowed."
+            title="Attending"
+          >
+            {upcomingGroups.attending.map(renderUpcomingEvent)}
+          </EventGroup>
+        </div>
+      </section>
 
-          <div className="space-y-4">
-            {myEvents.data?.past.map(renderPastEvent)}
-            {myEvents.data?.past.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center">
-                <h4 className="font-bold text-slate-900">No past events yet</h4>
-                <p className="mt-2 text-sm text-slate-600">
-                  Completed hosted and joined events will appear here.
-                </p>
-              </div>
-            ) : null}
+      <section className="rounded-[2rem] border border-slate-200 bg-white/80 p-5 shadow-sm">
+        <div className="mb-5 flex items-center gap-2">
+          <CheckCircle2 className="text-slate-600" size={22} />
+          <div>
+            <h3 className="text-xl font-black text-slate-900">Past events</h3>
+            <p className="text-sm text-slate-600">
+              Review completed hosted events and past events you attended.
+            </p>
           </div>
-        </section>
-      </div>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-2">
+          <EventGroup
+            accentClass="bg-slate-100 text-slate-700"
+            count={pastGroups.hosted.length}
+            emptyDescription="Past events you hosted will appear here after their scheduled time."
+            emptyTitle="No past hosted events"
+            icon={<Trophy size={20} />}
+            subtitle="Completed events where you were the host."
+            title="Hosted"
+          >
+            {pastGroups.hosted.map(renderPastEvent)}
+          </EventGroup>
+
+          <EventGroup
+            accentClass="bg-pink-100 text-pink-700"
+            count={pastGroups.attending.length}
+            emptyDescription="Past events you attended will appear here, including like status."
+            emptyTitle="No past attended events"
+            icon={<Heart size={20} />}
+            subtitle="Completed events where you joined as an attendee."
+            title="Attended"
+          >
+            {pastGroups.attending.map(renderPastEvent)}
+          </EventGroup>
+        </div>
+      </section>
 
       <ConfirmActionDialog
         cancelLabel={pendingAction?.kind === "cancel" ? "Keep event" : "Stay joined"}

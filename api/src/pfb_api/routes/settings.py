@@ -8,38 +8,54 @@ from sqlalchemy.orm import Session as DbSession
 from ..http import HTTPError, Request, json_response
 from ..models import AppSetting
 from ..security import require_admin
+from ..us_states import (
+    ALLOWED_RUNNING_STATE_CODES_KEY,
+    parse_state_codes,
+    serialize_state_codes,
+    state_name_for,
+    state_options,
+)
 
-RUNNING_REGION_SETTING_KEY = "running_region_limit"
-DEFAULT_RUNNING_REGION_LIMIT = "New York State, US"
-MAX_REGION_LIMIT_LENGTH = 120
 
+def _get_allowed_state_codes(db: DbSession) -> list[str]:
+    """Read allowed outdoor-run state codes from application settings.
 
-def _validate_region_limit(value: str) -> str:
-    """Validate the admin-managed boundary used for outdoor running location searches.
-
-    FReq 4: admins can manage event location settings. The region limit keeps running-location
-    searches understandable and campus-oriented without hardcoding a single boundary in the UI.
+    FReq 4: admins manage location settings. These state codes are the source of truth for outdoor
+    run location search and backend event validation.
     """
-    cleaned = value.strip()
+    setting = db.scalar(select(AppSetting).where(AppSetting.key == ALLOWED_RUNNING_STATE_CODES_KEY))
+    return parse_state_codes(setting.value if setting else None)
 
-    if not cleaned:
-        raise HTTPError(HTTPStatus.BAD_REQUEST, "Outdoor run region limit is required")
 
-    if len(cleaned) > MAX_REGION_LIMIT_LENGTH:
-        raise HTTPError(HTTPStatus.BAD_REQUEST, "Outdoor run region limit is too long")
+def _region_label_for_states(codes: list[str]) -> str:
+    """Return a readable region label for compatibility with older UI text."""
+    return ", ".join(state_name_for(code) for code in codes)
 
-    if any(character in cleaned for character in "\n\r\t"):
-        raise HTTPError(HTTPStatus.BAD_REQUEST, "Outdoor run region limit must be one line")
 
-    return cleaned
+def _validate_allowed_states(value) -> list[str]:
+    """Validate the admin-submitted state list."""
+    if not isinstance(value, list):
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Allowed states must be a list")
+
+    try:
+        return parse_state_codes(",".join(str(item) for item in value))
+    except ValueError as exc:
+        raise HTTPError(HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
 
 def get_settings(request: Request, start_response, db: DbSession):
     """Return public settings needed by student event creation screens."""
-    setting = db.scalar(select(AppSetting).where(AppSetting.key == RUNNING_REGION_SETTING_KEY))
-    limit = setting.value if setting else DEFAULT_RUNNING_REGION_LIMIT
+    allowed_states = _get_allowed_state_codes(db)
 
-    return json_response(start_response, HTTPStatus.OK, {"regionLimit": limit})
+    return json_response(
+        start_response,
+        HTTPStatus.OK,
+        {
+            "allowedStates": allowed_states,
+            "stateOptions": state_options(),
+            "regionLimit": _region_label_for_states(allowed_states),
+        },
+    )
 
 
 def update_settings(request: Request, start_response, db: DbSession):
@@ -50,14 +66,17 @@ def update_settings(request: Request, start_response, db: DbSession):
     require_admin(db, request)
 
     body = request.json_body or {}
-    new_limit = _validate_region_limit(str(body.get("regionLimit", "")))
+    allowed_states = _validate_allowed_states(body.get("allowedStates"))
 
-    setting = db.scalar(select(AppSetting).where(AppSetting.key == RUNNING_REGION_SETTING_KEY))
+    setting = db.scalar(select(AppSetting).where(AppSetting.key == ALLOWED_RUNNING_STATE_CODES_KEY))
     if setting is None:
-        setting = AppSetting(key=RUNNING_REGION_SETTING_KEY, value=new_limit)
+        setting = AppSetting(
+            key=ALLOWED_RUNNING_STATE_CODES_KEY,
+            value=serialize_state_codes(allowed_states),
+        )
         db.add(setting)
     else:
-        setting.value = new_limit
+        setting.value = serialize_state_codes(allowed_states)
 
     db.commit()
 
@@ -66,6 +85,8 @@ def update_settings(request: Request, start_response, db: DbSession):
         HTTPStatus.OK,
         {
             "message": "Settings updated",
-            "regionLimit": setting.value,
+            "allowedStates": allowed_states,
+            "stateOptions": state_options(),
+            "regionLimit": _region_label_for_states(allowed_states),
         },
     )

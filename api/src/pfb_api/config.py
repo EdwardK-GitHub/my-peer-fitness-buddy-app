@@ -35,6 +35,10 @@ class Settings:
     )
     session_ttl_hours: int = int(os.getenv("SESSION_TTL_HOURS", "336"))
     cookie_secure: bool = _read_bool("COOKIE_SECURE", False)
+    geocoding_user_agent: str = os.getenv(
+        "GEOCODING_USER_AGENT",
+        "PeerFitnessBuddy/0.1 course-project",
+    )
 
     @property
     def is_production(self) -> bool:

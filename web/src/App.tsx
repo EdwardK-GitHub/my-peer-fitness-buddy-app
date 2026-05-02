@@ -3,7 +3,9 @@ import { Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { ProtectedAdminRoute } from "./components/ProtectedAdminRoute";
 import { ProtectedUserRoute } from "./components/ProtectedUserRoute";
+import { AdminBadgesPage } from "./pages/AdminBadgesPage";
 import { AdminDashboardPage } from "./pages/AdminDashboardPage";
+import { AdminLocationsPage } from "./pages/AdminLocationsPage";
 import { AdminLoginPage } from "./pages/AdminLoginPage";
 import { BadgesPage } from "./pages/BadgesPage";
 import { EventsPage } from "./pages/EventsPage";
@@ -31,6 +33,8 @@ export default function App() {
 
         <Route element={<ProtectedAdminRoute />}>
           <Route element={<AdminDashboardPage />} path="admin/dashboard" />
+          <Route element={<AdminLocationsPage />} path="admin/locations" />
+          <Route element={<AdminBadgesPage />} path="admin/badges" />
         </Route>
       </Route>
     </Routes>

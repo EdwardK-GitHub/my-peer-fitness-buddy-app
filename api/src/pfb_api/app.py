@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from .db import SessionLocal
 from .http import HTTPError, Request, json_response, load_request
-from .routes import admin_auth, auth, badges, events, facilities, settings
+from .routes import admin_auth, auth, badges, events, facilities, locations, settings
 
 Handler = Callable[[Request, Any, DbSession], list[bytes]]
 
@@ -41,6 +41,8 @@ ROUTES: list[tuple[str, re.Pattern[str], Handler]] = [
     ("POST", re.compile(r"^/api/admin/facilities$"), facilities.create_facility),
     ("PUT", re.compile(r"^/api/admin/facilities/(?P<id>[^/]+)$"), facilities.update_facility),
     ("DELETE", re.compile(r"^/api/admin/facilities/(?P<id>[^/]+)$"), facilities.deactivate_facility),
+
+    ("GET", re.compile(r"^/api/locations/autocomplete$"), locations.autocomplete),
 
     ("GET", re.compile(r"^/api/events$"), events.list_events),
     ("POST", re.compile(r"^/api/events$"), events.create_event),

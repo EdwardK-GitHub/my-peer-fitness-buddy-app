@@ -216,7 +216,7 @@ export function EventsPage() {
     }
 
     if (form.locationType === "running" && (!form.locationLabel || !form.locationDetails)) {
-      errors.locationLabel = "Search and select a running location on the map.";
+      errors.locationLabel = "Search and select a suggested running location.";
     }
 
     if (form.notes.length > 1000) {
@@ -417,14 +417,22 @@ export function EventsPage() {
                   Running location
                 </label>
                 <LocationSelector
-                  onSelect={(label, lat, lng) =>
+                  allowedStates={settings.data?.allowedStates ?? []}
+                  onClear={() =>
+                    setForm((current) => ({
+                      ...current,
+                      locationLabel: "",
+                      locationDetails: "",
+                    }))
+                  }
+                  onSelect={(label, lat, lng, stateCode, stateName) =>
                     setForm((current) => ({
                       ...current,
                       locationLabel: label,
-                      locationDetails: JSON.stringify({ lat, lng }),
+                      locationDetails: JSON.stringify({ lat, lng, stateCode, stateName }),
                     }))
                   }
-                  regionLimit={settings.data?.regionLimit || "New York State, US"}
+                  stateOptions={settings.data?.stateOptions ?? []}
                 />
                 {form.locationLabel ? (
                   <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm font-medium text-slate-700">

@@ -48,6 +48,25 @@ export type FacilityInput = {
   description?: string;
 };
 
+export type UsStateOption = {
+  code: string;
+  name: string;
+};
+
+export type SettingsResponse = {
+  allowedStates: string[];
+  stateOptions: UsStateOption[];
+  regionLimit: string;
+};
+
+export type LocationSuggestion = {
+  label: string;
+  lat: number;
+  lng: number;
+  stateCode: string;
+  stateName: string;
+};
+
 export type HostBadge = {
   code: string;
   displayName: string;
@@ -171,11 +190,11 @@ export const api = {
       headers: { "X-CSRF-Token": csrfToken },
     }),
 
-  getSettings: () => request<{ regionLimit: string }>("/api/settings"),
-  updateSettings: (regionLimit: string) =>
-    request<{ message: string; regionLimit: string }>("/api/admin/settings", {
+  getSettings: () => request<SettingsResponse>("/api/settings"),
+  updateSettings: (allowedStates: string[]) =>
+    request<SettingsResponse & { message: string }>("/api/admin/settings", {
       method: "PUT",
-      body: JSON.stringify({ regionLimit }),
+      body: JSON.stringify({ allowedStates }),
     }),
 
   getFacilities: () => request<{ facilities: Facility[] }>("/api/facilities"),
@@ -197,6 +216,13 @@ export const api = {
     request<{ message: string; facility: Facility }>(`/api/admin/facilities/${id}`, {
       method: "DELETE",
     }),
+
+  autocompleteLocations: (query: string) => {
+    const search = new URLSearchParams({ q: query });
+    return request<{ suggestions: LocationSuggestion[] }>(
+      `/api/locations/autocomplete?${search.toString()}`,
+    );
+  },
 
   getEvents: (params?: {
     from?: string;

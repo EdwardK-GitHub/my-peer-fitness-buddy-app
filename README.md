@@ -87,3 +87,19 @@
 - **`web/src/components/ProtectedAdminRoute.tsx`**: Protects routes ensuring only authenticated admins can access them.
 - **`web/src/components/ProtectedUserRoute.tsx`**: Protects routes ensuring only authenticated users can access them.
 - **`web/src/pages/`**: Contains the primary React view components for each distinct route.
+
+- **`api/src/pfb_api/routes/locations.py`**: Provides backend-proxied outdoor-run location autocomplete with state filtering.
+
+- **`api/src/pfb_api/us_states.py`**: Defines U.S. state options and validation helpers for outdoor-run restrictions.
+
+- **`web/src/components/admin/StateMultiSelect.tsx`**: Provides searchable multi-select controls for allowed U.S. states.
+
+- **`web/src/components/admin/RunningStateSettings.tsx`**: Lets admins manage outdoor-run state restrictions.
+
+- **`web/src/components/admin/FacilityManager.tsx`**: Lets admins manage athletic facilities on the location settings page.
+
+- **`web/src/components/admin/BadgeApplicationQueue.tsx`**: Lets admins review badge applications on the badge settings page.
+
+- **`web/src/pages/AdminLocationsPage.tsx`**: Provides the dedicated admin location settings page.
+
+- **`web/src/pages/AdminBadgesPage.tsx`**: Provides the dedicated admin badge settings page.

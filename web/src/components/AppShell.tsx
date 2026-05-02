@@ -66,7 +66,10 @@ export function AppShell() {
     { label: "My Events", to: "/my-events" },
   ];
 
-  const adminLinks: NavItem[] = [{ label: "Admin Dashboard", to: "/admin/dashboard" }];
+  const adminLinks: NavItem[] = [
+    { label: "Locations", to: "/admin/locations" },
+    { label: "Badges", to: "/admin/badges" },
+  ];
 
   const navLinks = adminAuthenticated && !userAuthenticated
     ? adminLinks

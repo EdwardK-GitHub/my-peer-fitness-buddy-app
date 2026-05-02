@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session as DbSession
 from sqlalchemy.orm import joinedload
 
 from ..http import HTTPError, Request, json_response
-from ..models import Event, EventAttendance, EventLike, Facility, User, UserBadge, utc_now
+from ..models import AppSetting, Event, EventAttendance, EventLike, Facility, User, UserBadge, utc_now
 from ..security import load_auth_context, require_user
+from ..us_states import ALLOWED_RUNNING_STATE_CODES_KEY, parse_state_codes, state_name_for
 
 # These limits keep student-created events realistic and easy to manage.
 # FReq 1.1: Every event has a capacity.
@@ -253,16 +254,32 @@ def _validate_location_type(value: Any) -> str:
     return location_type
 
 
-def _validate_running_location(label_value: Any, details_value: Any) -> tuple[str, str]:
+def _allowed_running_state_codes(db: DbSession) -> list[str]:
+    """Read the admin-selected state restrictions for outdoor runs.
+
+    FReq 4: admins manage location restrictions. FReq 1.4 uses those restrictions when validating
+    running event locations.
+    """
+    setting = db.scalar(select(AppSetting).where(AppSetting.key == ALLOWED_RUNNING_STATE_CODES_KEY))
+    return parse_state_codes(setting.value if setting else None)
+
+
+def _validate_running_location(
+    label_value: Any,
+    details_value: Any,
+    *,
+    db: DbSession,
+) -> tuple[str, str]:
     """Validate the detailed location for running events.
 
     FReq 1.4 requires running-based events to include a detailed location description.
+    FReq 4 requires admin location restrictions to be enforced on user-submitted locations.
     """
     location_label = str(label_value or "").strip()
     location_details = str(details_value or "").strip()
 
     if not location_label or not location_details:
-        raise HTTPError(HTTPStatus.BAD_REQUEST, "Select a running location before posting the event")
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Select a suggested running location before posting the event")
 
     if len(location_label) > MAX_LOCATION_LABEL_LENGTH:
         raise HTTPError(
@@ -270,24 +287,44 @@ def _validate_running_location(label_value: Any, details_value: Any) -> tuple[st
             f"Running location label must be {MAX_LOCATION_LABEL_LENGTH} characters or fewer",
         )
 
-    # The current frontend stores selected map coordinates as JSON. The backend accepts that shape
-    # and validates latitude/longitude when JSON coordinates are provided.
     try:
         parsed = json.loads(location_details)
-    except json.JSONDecodeError:
-        return location_label, location_details
+    except json.JSONDecodeError as exc:
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Running location details are invalid") from exc
 
-    if isinstance(parsed, dict) and {"lat", "lng"}.issubset(parsed):
-        try:
-            lat = float(parsed["lat"])
-            lng = float(parsed["lng"])
-        except (TypeError, ValueError) as exc:
-            raise HTTPError(HTTPStatus.BAD_REQUEST, "Running map coordinates are invalid") from exc
+    if not isinstance(parsed, dict):
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Running location details are invalid")
 
-        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-            raise HTTPError(HTTPStatus.BAD_REQUEST, "Running map coordinates are outside valid bounds")
+    try:
+        lat = float(parsed["lat"])
+        lng = float(parsed["lng"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Running map coordinates are invalid") from exc
 
-    return location_label, location_details
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        raise HTTPError(HTTPStatus.BAD_REQUEST, "Running map coordinates are outside valid bounds")
+
+    state_code = str(parsed.get("stateCode") or "").strip().upper()
+    allowed_state_codes = _allowed_running_state_codes(db)
+
+    if state_code not in allowed_state_codes:
+        allowed_names = ", ".join(state_name_for(code) for code in allowed_state_codes)
+        raise HTTPError(
+            HTTPStatus.BAD_REQUEST,
+            f"Outdoor run location must be in the allowed states: {allowed_names}",
+        )
+
+    normalized_details = json.dumps(
+        {
+            "lat": lat,
+            "lng": lng,
+            "stateCode": state_code,
+            "stateName": state_name_for(state_code),
+        },
+        separators=(",", ":"),
+    )
+
+    return location_label, normalized_details
 
 
 def list_events(request: Request, start_response, db: DbSession):
@@ -473,6 +510,7 @@ def create_event(request: Request, start_response, db: DbSession):
         location_label, location_details = _validate_running_location(
             body.get("locationLabel"),
             body.get("locationDetails"),
+            db=db,
         )
         event.location_label = location_label
         event.location_details = location_details
